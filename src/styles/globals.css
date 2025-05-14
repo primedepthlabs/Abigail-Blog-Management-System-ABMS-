@@ -42,7 +42,9 @@
   }
 
   .cursor-newtab {
-    cursor: url('/images/new-tab.png') 10 10, pointer;
+    cursor:
+      url('/images/new-tab.png') 10 10,
+      pointer;
   }
 
   /* #region  /**=========== Typography =========== */
@@ -91,7 +93,98 @@
     @apply min-h-[calc(100vh-56px)];
   }
 }
+/* Add these styles to your global CSS file */
 
+.article-content {
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  line-height: 1.6;
+  color: #1f2937;
+}
+
+.article-content h1,
+.article-content h2,
+.article-content h3,
+.article-content h4,
+.article-content h5,
+.article-content h6 {
+  font-weight: 700;
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+  line-height: 1.2;
+}
+
+.article-content h1 {
+  font-size: 1.8rem;
+}
+
+.article-content h2 {
+  font-size: 1.5rem;
+}
+
+.article-content h3 {
+  font-size: 1.3rem;
+}
+
+.article-content p {
+  margin-bottom: 1.2em;
+}
+
+.article-content a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+.article-content a:hover {
+  color: #2563eb;
+}
+
+.article-content img {
+  max-width: 100%;
+  height: auto;
+  margin: 1rem 0;
+  border-radius: 0.375rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.article-content ul,
+.article-content ol {
+  padding-left: 1.5rem;
+  margin-bottom: 1.2em;
+}
+
+.article-content li {
+  margin-bottom: 0.375rem;
+}
+
+.article-content blockquote {
+  border-left: 4px solid #d1d5db;
+  padding-left: 1rem;
+  font-style: italic;
+  color: #4b5563;
+  margin: 1.5rem 0;
+}
+
+.article-content pre {
+  background-color: #f3f4f6;
+  padding: 1rem;
+  border-radius: 0.375rem;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+}
+
+.article-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  background-color: #f3f4f6;
+  padding: 0.2em 0.4em;
+  border-radius: 0.25rem;
+}
 @layer utilities {
   .animated-underline {
     background-image: linear-gradient(#33333300, #33333300),
@@ -100,8 +193,12 @@
         var(--color-primary-400),
         var(--color-primary-500)
       );
-    background-size: 100% 2px, 0 2px;
-    background-position: 100% 100%, 0 100%;
+    background-size:
+      100% 2px,
+      0 2px;
+    background-position:
+      100% 100%,
+      0 100%;
     background-repeat: no-repeat;
   }
   @media (prefers-reduced-motion: no-preference) {
@@ -113,6 +210,8 @@
   }
   .animated-underline:hover,
   .animated-underline:focus-visible {
-    background-size: 0 2px, 100% 2px;
+    background-size:
+      0 2px,
+      100% 2px;
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useRef,useState } from 'react';
 
 export default function Home() {
   const [url, setUrl] = useState('');
@@ -27,7 +27,7 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ input: csvData }),
+        body: JSON.stringify({ id: 2, input: csvData }),
       });
       const humanized = await humanizeRes.json();
       setResult(humanized.summary || 'No result returned');

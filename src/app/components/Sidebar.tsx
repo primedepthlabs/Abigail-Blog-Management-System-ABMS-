@@ -1,8 +1,7 @@
 'use client';
 
-import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
-import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import HomeIcon from '@mui/icons-material/Home';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 interface SidebarProps {
   activeSection: string;
   setActiveSection: (section: string) => void;
@@ -14,9 +13,7 @@ export default function Sidebar({
 }: SidebarProps) {
   return (
     <aside className='w-64 bg-white text-white p-6 space-y-6 shadow-md rounded rounded-tl-3xl rounded-tr-3xl  ml-2 mt-2'>
-      <h2 className='text-3xl text-center font-semibold text-black'>
-        VirtuSleek
-      </h2>
+      <h2 className='text-3xl text-center font-semibold text-black'>AbiGail</h2>
       <ul className='space-y-3 py-6'>
         <li
           className={`cursor-pointer p-2 text-sm rounded-xl transition ${
@@ -31,19 +28,7 @@ export default function Sidebar({
             Home
           </div>
         </li>
-        <li
-          className={`cursor-pointer p-2 text-sm rounded-xl transition ${
-            activeSection === 'blog'
-              ? 'bg-gray-200 text-gray-700 font-normal'
-              : 'hover:bg-gray-200 text-gray-500 font-light'
-          }`}
-          onClick={() => setActiveSection('blog')}
-        >
-          <div className='flex items-center gap-3'>
-            <SummarizeOutlinedIcon className='text-gray-500' />
-            Blog Summarizer
-          </div>
-        </li>
+
         <li
           className={`cursor-pointer p-2 text-sm rounded-xl transition ${
             activeSection === 'humanizer'
