@@ -615,7 +615,7 @@ export default function AppPage() {
       <div className='flex flex-col flex-1 overflow-auto'>
         {/* Header with theme toggle */}
         <header
-          className={`sticky top-0 z-100 px-6 py-4 flex items-center justify-between transition-colors duration-300 ${
+          className={`sticky top-0 z-50 px-6 py-4 flex items-center justify-between transition-colors duration-300 ${
             theme === 'dark'
               ? ' border-b border-gray-700'
               : 'bg-white/80 border-b border-gray-200'
@@ -635,7 +635,7 @@ export default function AppPage() {
               : 'Settings'}
           </h1>
 
-          <div className='flex items-center gap-4'>
+          <div className='flex items-center pr-10 gap-4'>
             {/* Theme Toggle Button */}
             <motion.button
               whileHover={{ scale: 1.05 }}
