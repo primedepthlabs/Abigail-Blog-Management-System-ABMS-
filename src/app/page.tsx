@@ -544,6 +544,7 @@ import { motion } from 'framer-motion';
 import Home from './components/Home';
 import Humanizer from './components/Humanizer'; // This is actually the BlogTable component
 import Sidebar from './components/Sidebar';
+import RssManager from './components/RssManager';
 import { Sun, Moon } from 'lucide-react';
 
 export default function AppPage() {
@@ -630,6 +631,8 @@ export default function AppPage() {
               ? 'Dashboard'
               : activeSection === 'humanizer'
               ? 'Blogs'
+              : activeSection === 'rss'
+              ? 'RSS Feeds'
               : activeSection === 'notifications'
               ? 'Notifications'
               : 'Settings'}
@@ -682,6 +685,10 @@ export default function AppPage() {
             >
               {activeSection === 'home' && (
                 <Home theme={theme} setTheme={setTheme} />
+              )}
+
+              {activeSection === 'rss' && (
+                <RssManager theme={theme} setTheme={setTheme} />
               )}
 
               {activeSection === 'notifications' && (

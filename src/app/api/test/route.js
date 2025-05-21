@@ -195,8 +195,7 @@ Respond ONLY in this exact JSON format:
 
             // If StealthGPT fails, use OpenAI as fallback
             console.log(
-              `⚠️ StealthGPT failed, falling back to OpenAI for item ${
-                index + 1
+              `⚠️ StealthGPT failed, falling back to OpenAI for item ${index + 1
               }`,
             );
 
@@ -207,9 +206,8 @@ Respond ONLY in this exact JSON format:
 Only return the rewritten text, nothing else.`;
 
             const aiRes = await openai.chat.completions.create({
-              model: 'gpt-3.5-turbo', // Using 3.5 to save costs
+              model: 'gpt-4o', // Using 3.5 to save costs
               messages: [{ role: 'user', content: prompt }],
-              max_tokens: 250,
               temperature: 0.7,
             });
 

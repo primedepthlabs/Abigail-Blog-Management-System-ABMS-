@@ -95,7 +95,7 @@ export async function GET(req) {
     // You can remove the check for the 'id' query parameter if you no longer want to use it
     const { data, error } = await supabase
       .from('Humanize_Data')
-      .select('humanize_Data'); // This fetches all records without filtering by ID
+      .select('*'); // This fetches all records without filtering by ID
 
     if (error) {
       console.error('Supabase fetch error:', error);
