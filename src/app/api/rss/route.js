@@ -294,7 +294,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 
 // Helper function for OpenAI API with retry logic
-async function callOpenAIWithRetry(messages, maxTokens = 5000, temperature = 0.7, maxRetries = 3) {
+async function callOpenAIWithRetry(messages, maxTokens = 10000, temperature = 0.7, maxRetries = 3) {
   let retries = 0;
   let lastError = null;
 
@@ -914,7 +914,7 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
     // 4. Use OpenAI to extract and enhance data with retry logic
     let enhancedBlogMarkdown = '';
     try {
-      const aiRes = await callOpenAIWithRetry([{ role: 'user', content: prompt }], 4000, 0.7);
+      const aiRes = await callOpenAIWithRetry([{ role: 'user', content: prompt }], 10000, 0.7);
       enhancedBlogMarkdown = aiRes.choices[0]?.message?.content || '';
       console.log(`🤖 OpenAI blog creation: ${enhancedBlogMarkdown.substring(0, 100)}...`);
     } catch (openAiError) {
@@ -991,7 +991,7 @@ ${enhancedBlogMarkdown}
 Only return the improved markdown, nothing else. Maintain all headings, images, and formatting.`;
 
         try {
-          const fallbackRes = await callOpenAIWithRetry([{ role: 'user', content: fallbackPrompt }], 4000, 0.7);
+          const fallbackRes = await callOpenAIWithRetry([{ role: 'user', content: fallbackPrompt }], 10000, 0.7);
           humanizedBlogMarkdown = fallbackRes.choices[0]?.message?.content || enhancedBlogMarkdown;
           console.log(`✅ OpenAI fallback succeeded for item ${index + 1}`);
         } catch (fallbackError) {
