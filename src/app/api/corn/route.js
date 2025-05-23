@@ -3,7 +3,7 @@ export const config = {
   schedule: '0 * * * *', // Runs every hour
 };
 
-export default async function handler(request: Request) {
+export default async function handler(request) {
   // Your logic here
   console.log('Cron job executed at', new Date());
 
