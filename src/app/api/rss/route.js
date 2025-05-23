@@ -42,7 +42,7 @@ export async function GET(req) {
         link: '',
         lastBuildDate: '',
         language: '',
-        items: []
+        items: [],
       };
 
       // Parse feed metadata based on feed type
@@ -50,113 +50,156 @@ export async function GET(req) {
         const channel = doc.querySelector('channel');
         if (channel) {
           feedData.title = channel.querySelector('title')?.textContent || '';
-          feedData.description = channel.querySelector('description')?.textContent || '';
+          feedData.description =
+            channel.querySelector('description')?.textContent || '';
           feedData.link = channel.querySelector('link')?.textContent || '';
-          feedData.lastBuildDate = channel.querySelector('lastBuildDate')?.textContent || '';
-          feedData.language = channel.querySelector('language')?.textContent || '';
+          feedData.lastBuildDate =
+            channel.querySelector('lastBuildDate')?.textContent || '';
+          feedData.language =
+            channel.querySelector('language')?.textContent || '';
         }
 
         // Parse items
-        feedData.items = Array.from(doc.querySelectorAll('item')).map((item) => {
-          // Get all potential child elements
-          const children = Array.from(item.children);
-          const itemData = {};
+        feedData.items = Array.from(doc.querySelectorAll('item')).map(
+          (item) => {
+            // Get all potential child elements
+            const children = Array.from(item.children);
+            const itemData = {};
 
-          // Extract standard RSS fields
-          itemData.title = item.querySelector('title')?.textContent || '';
-          itemData.link = item.querySelector('link')?.textContent || '';
-          itemData.pubDate = item.querySelector('pubDate')?.textContent || '';
-          itemData.description = item.querySelector('description')?.textContent || '';
-          itemData.guid = item.querySelector('guid')?.textContent || '';
-          itemData.categories = Array.from(item.querySelectorAll('category')).map(cat => cat.textContent);
+            // Extract standard RSS fields
+            itemData.title = item.querySelector('title')?.textContent || '';
+            itemData.link = item.querySelector('link')?.textContent || '';
+            itemData.pubDate = item.querySelector('pubDate')?.textContent || '';
+            itemData.description =
+              item.querySelector('description')?.textContent || '';
+            itemData.guid = item.querySelector('guid')?.textContent || '';
+            itemData.categories = Array.from(
+              item.querySelectorAll('category'),
+            ).map((cat) => cat.textContent);
 
-          // Handle content with namespace
-          const contentEncoded = item.querySelector('content\\:encoded') ||
-            item.getElementsByTagNameNS('*', 'encoded')[0];
+            // Handle content with namespace
+            const contentEncoded =
+              item.querySelector('content\\:encoded') ||
+              item.getElementsByTagNameNS('*', 'encoded')[0];
 
-          if (contentEncoded) {
-            itemData.content = contentEncoded.textContent || '';
-          }
+            if (contentEncoded) {
+              itemData.content = contentEncoded.textContent || '';
+            }
 
-          // Get all remaining elements as custom fields
-          children.forEach(child => {
-            const nodeName = child.nodeName.toLowerCase();
-            // Skip nodes we've already processed
-            if (!['title', 'link', 'pubdate', 'description', 'guid', 'category'].includes(nodeName)) {
-              // Handle namespaced elements
-              if (nodeName.includes(':')) {
-                const [namespace, name] = nodeName.split(':');
-                if (!itemData[namespace]) itemData[namespace] = {};
-                itemData[namespace][name] = child.textContent;
-              } else {
-                // Only add if not already processed
-                if (!itemData[nodeName]) {
-                  itemData[nodeName] = child.textContent;
+            // Get all remaining elements as custom fields
+            children.forEach((child) => {
+              const nodeName = child.nodeName.toLowerCase();
+              // Skip nodes we've already processed
+              if (
+                ![
+                  'title',
+                  'link',
+                  'pubdate',
+                  'description',
+                  'guid',
+                  'category',
+                ].includes(nodeName)
+              ) {
+                // Handle namespaced elements
+                if (nodeName.includes(':')) {
+                  const [namespace, name] = nodeName.split(':');
+                  if (!itemData[namespace]) itemData[namespace] = {};
+                  itemData[namespace][name] = child.textContent;
+                } else {
+                  // Only add if not already processed
+                  if (!itemData[nodeName]) {
+                    itemData[nodeName] = child.textContent;
+                  }
                 }
               }
-            }
-          });
+            });
 
-          return itemData;
-        });
+            return itemData;
+          },
+        );
       } else if (feedType === 'atom') {
         // Atom feed handling
         feedData.title = doc.querySelector('feed > title')?.textContent || '';
-        feedData.description = doc.querySelector('feed > subtitle')?.textContent || '';
-        feedData.link = doc.querySelector('feed > link[rel="alternate"]')?.getAttribute('href') ||
-          doc.querySelector('feed > link')?.getAttribute('href') || '';
-        feedData.lastBuildDate = doc.querySelector('feed > updated')?.textContent || '';
+        feedData.description =
+          doc.querySelector('feed > subtitle')?.textContent || '';
+        feedData.link =
+          doc
+            .querySelector('feed > link[rel="alternate"]')
+            ?.getAttribute('href') ||
+          doc.querySelector('feed > link')?.getAttribute('href') ||
+          '';
+        feedData.lastBuildDate =
+          doc.querySelector('feed > updated')?.textContent || '';
 
         // Parse entries
-        feedData.items = Array.from(doc.querySelectorAll('entry')).map((entry) => {
-          const itemData = {};
+        feedData.items = Array.from(doc.querySelectorAll('entry')).map(
+          (entry) => {
+            const itemData = {};
 
-          itemData.title = entry.querySelector('title')?.textContent || '';
-          itemData.link = entry.querySelector('link[rel="alternate"]')?.getAttribute('href') ||
-            entry.querySelector('link')?.getAttribute('href') || '';
-          itemData.pubDate = entry.querySelector('published')?.textContent ||
-            entry.querySelector('updated')?.textContent || '';
-          itemData.description = entry.querySelector('summary')?.textContent || '';
-          itemData.content = entry.querySelector('content')?.textContent || '';
-          itemData.id = entry.querySelector('id')?.textContent || '';
-          itemData.authors = Array.from(entry.querySelectorAll('author')).map(author => {
-            return {
-              name: author.querySelector('name')?.textContent || '',
-              email: author.querySelector('email')?.textContent || ''
-            };
-          });
+            itemData.title = entry.querySelector('title')?.textContent || '';
+            itemData.link =
+              entry
+                .querySelector('link[rel="alternate"]')
+                ?.getAttribute('href') ||
+              entry.querySelector('link')?.getAttribute('href') ||
+              '';
+            itemData.pubDate =
+              entry.querySelector('published')?.textContent ||
+              entry.querySelector('updated')?.textContent ||
+              '';
+            itemData.description =
+              entry.querySelector('summary')?.textContent || '';
+            itemData.content =
+              entry.querySelector('content')?.textContent || '';
+            itemData.id = entry.querySelector('id')?.textContent || '';
+            itemData.authors = Array.from(entry.querySelectorAll('author')).map(
+              (author) => {
+                return {
+                  name: author.querySelector('name')?.textContent || '',
+                  email: author.querySelector('email')?.textContent || '',
+                };
+              },
+            );
 
-          return itemData;
-        });
+            return itemData;
+          },
+        );
       } else if (feedType === 'rdf') {
         // RDF feed handling
-        feedData.title = doc.querySelector('channel > title')?.textContent || '';
-        feedData.description = doc.querySelector('channel > description')?.textContent || '';
+        feedData.title =
+          doc.querySelector('channel > title')?.textContent || '';
+        feedData.description =
+          doc.querySelector('channel > description')?.textContent || '';
         feedData.link = doc.querySelector('channel > link')?.textContent || '';
 
         // Parse items
-        feedData.items = Array.from(doc.querySelectorAll('item')).map((item) => {
-          const itemData = {};
+        feedData.items = Array.from(doc.querySelectorAll('item')).map(
+          (item) => {
+            const itemData = {};
 
-          itemData.title = item.querySelector('title')?.textContent || '';
-          itemData.link = item.querySelector('link')?.textContent || '';
-          itemData.description = item.querySelector('description')?.textContent || '';
+            itemData.title = item.querySelector('title')?.textContent || '';
+            itemData.link = item.querySelector('link')?.textContent || '';
+            itemData.description =
+              item.querySelector('description')?.textContent || '';
 
-          // Handle Dublin Core metadata if present
-          const dcCreator = item.querySelector('dc\\:creator') ||
-            item.getElementsByTagNameNS('*', 'creator')[0];
-          if (dcCreator) {
-            itemData.creator = dcCreator.textContent;
-          }
+            // Handle Dublin Core metadata if present
+            const dcCreator =
+              item.querySelector('dc\\:creator') ||
+              item.getElementsByTagNameNS('*', 'creator')[0];
+            if (dcCreator) {
+              itemData.creator = dcCreator.textContent;
+            }
 
-          const dcDate = item.querySelector('dc\\:date') ||
-            item.getElementsByTagNameNS('*', 'date')[0];
-          if (dcDate) {
-            itemData.pubDate = dcDate.textContent;
-          }
+            const dcDate =
+              item.querySelector('dc\\:date') ||
+              item.getElementsByTagNameNS('*', 'date')[0];
+            if (dcDate) {
+              itemData.pubDate = dcDate.textContent;
+            }
 
-          return itemData;
-        });
+            return itemData;
+          },
+        );
       }
 
       // Return complete feed data
@@ -193,34 +236,36 @@ function extractImagesFromHTML(html) {
     // Try finding all img tags
     const imgTags = doc.querySelectorAll('img');
     if (imgTags && imgTags.length) {
-      imgTags.forEach(img => {
+      imgTags.forEach((img) => {
         if (img.src && isValidImageUrl(img.src)) {
           images.push({
             url: img.src,
             alt: img.alt || '',
             width: img.width || 0,
             height: img.height || 0,
-            area: (img.width && img.height) ? img.width * img.height : 0,
-            position: 'body'
+            area: img.width && img.height ? img.width * img.height : 0,
+            position: 'body',
           });
         }
       });
     }
 
     // Try finding media:content tags
-    const mediaContents = doc.querySelectorAll('media\\:content') ||
+    const mediaContents =
+      doc.querySelectorAll('media\\:content') ||
       doc.getElementsByTagNameNS('*', 'content');
     if (mediaContents && mediaContents.length) {
-      mediaContents.forEach(media => {
+      mediaContents.forEach((media) => {
         const url = media.getAttribute('url');
         if (url && isValidImageUrl(url)) {
           images.push({
             url: url,
             width: parseInt(media.getAttribute('width') || '0', 10),
             height: parseInt(media.getAttribute('height') || '0', 10),
-            area: parseInt(media.getAttribute('width') || '0', 10) *
+            area:
+              parseInt(media.getAttribute('width') || '0', 10) *
               parseInt(media.getAttribute('height') || '0', 10),
-            position: 'media'
+            position: 'media',
           });
         }
       });
@@ -232,16 +277,20 @@ function extractImagesFromHTML(html) {
       images.push({
         url: ogImage.content,
         position: 'meta-og',
-        priority: 10 // Higher priority
+        priority: 10, // Higher priority
       });
     }
 
     const twitterImage = doc.querySelector('meta[name="twitter:image"]');
-    if (twitterImage && twitterImage.content && isValidImageUrl(twitterImage.content)) {
+    if (
+      twitterImage &&
+      twitterImage.content &&
+      isValidImageUrl(twitterImage.content)
+    ) {
       images.push({
         url: twitterImage.content,
         position: 'meta-twitter',
-        priority: 9 // Higher priority
+        priority: 9, // Higher priority
       });
     }
   } catch (e) {
@@ -271,9 +320,11 @@ function isValidImageUrl(url) {
   if (lowerUrl.startsWith('data:')) return false;
 
   // Check for image extensions
-  return imageExtensions.some(ext => lowerUrl.endsWith(ext)) ||
+  return (
+    imageExtensions.some((ext) => lowerUrl.endsWith(ext)) ||
     lowerUrl.includes('/image/') ||
-    lowerUrl.includes('/images/');
+    lowerUrl.includes('/images/')
+  );
 }
 
 // Helper to extract the cleanest text from HTML
@@ -286,7 +337,10 @@ function extractTextFromHTML(html) {
     return doc.body.textContent || '';
   } catch (e) {
     // If parsing fails, try a simple regex approach
-    return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return html
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 }
 
@@ -294,7 +348,12 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 
 // Helper function for OpenAI API with retry logic
-async function callOpenAIWithRetry(messages, maxTokens = 10000, temperature = 0.7, maxRetries = 3) {
+async function callOpenAIWithRetry(
+  messages,
+  maxTokens = 10000,
+  temperature = 0.7,
+  maxRetries = 3,
+) {
   let retries = 0;
   let lastError = null;
 
@@ -309,17 +368,23 @@ async function callOpenAIWithRetry(messages, maxTokens = 10000, temperature = 0.
       return response;
     } catch (error) {
       lastError = error;
-      console.log(`⚠️ OpenAI API error (attempt ${retries + 1}/${maxRetries}): ${error.message}`);
+      console.log(
+        `⚠️ OpenAI API error (attempt ${retries + 1}/${maxRetries}): ${
+          error.message
+        }`,
+      );
 
       // Wait before retrying (exponential backoff)
       const waitTime = Math.pow(2, retries) * 1000; // 1s, 2s, 4s
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
       retries++;
     }
   }
 
   // If we got here, all retries failed
-  throw new Error(`OpenAI API failed after ${maxRetries} attempts. Last error: ${lastError.message}`);
+  throw new Error(
+    `OpenAI API failed after ${maxRetries} attempts. Last error: ${lastError.message}`,
+  );
 }
 
 // Custom function to extract text from HTML
@@ -381,7 +446,7 @@ function customExtractImagesFromHTML(html, baseUrl = '') {
           area: width * height,
           position: 'content',
           priority: 2,
-          caption: title
+          caption: title,
         });
       }
 
@@ -391,7 +456,7 @@ function customExtractImagesFromHTML(html, baseUrl = '') {
         const srcsetParts = srcset.split(',');
         for (const part of srcsetParts) {
           const [url, _] = part.trim().split(' ');
-          if (url && !images.some(img => img.url === url)) {
+          if (url && !images.some((img) => img.url === url)) {
             // Convert relative URLs to absolute if baseUrl is provided
             let imgUrl = url;
             if (baseUrl && (url.startsWith('/') || !url.startsWith('http'))) {
@@ -411,7 +476,7 @@ function customExtractImagesFromHTML(html, baseUrl = '') {
               area: width * height,
               position: 'srcset',
               priority: 1,
-              caption: title
+              caption: title,
             });
           }
         }
@@ -434,14 +499,19 @@ async function processItem(item, index, totalItems, feedId) {
       return { status: 'error', error: 'No link available' };
     }
 
-    console.log(`📝 Processing item ${index + 1}/${totalItems}: ${item.title?.substring(0, 30)}...`);
+    console.log(
+      `📝 Processing item ${index + 1}/${totalItems}: ${item.title?.substring(
+        0,
+        30,
+      )}...`,
+    );
 
     // 1. Insert the blog URL into rss_feed_data
     const { data: rssItemData, error: rssItemError } = await supabase
       .from('rss_feed_data')
       .insert({
         feed_id: feedId,
-        blog_url: item.link
+        blog_url: item.link,
       })
       .select('id');
 
@@ -467,9 +537,10 @@ async function processItem(item, index, totalItems, feedId) {
     try {
       const response = await axios.get(item.link, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
-        timeout: 15000 // 15 second timeout
+        timeout: 15000, // 15 second timeout
       });
 
       fullHtmlContent = response.data;
@@ -490,7 +561,7 @@ async function processItem(item, index, totalItems, feedId) {
         '.author',
         '.byline',
         '[rel="author"]',
-        '[itemprop="author"]'
+        '[itemprop="author"]',
       ];
 
       for (const selector of authorSelectors) {
@@ -516,7 +587,7 @@ async function processItem(item, index, totalItems, feedId) {
           '.publish-date',
           '.post-date',
           '.entry-date',
-          '[itemprop="datePublished"]'
+          '[itemprop="datePublished"]',
         ];
 
         for (const selector of dateSelectors) {
@@ -552,7 +623,7 @@ async function processItem(item, index, totalItems, feedId) {
         'main',
         '#content',
         '.post',
-        '[itemprop="articleBody"]'
+        '[itemprop="articleBody"]',
       ];
 
       let mainContentElement = null;
@@ -575,9 +646,7 @@ async function processItem(item, index, totalItems, feedId) {
       }
 
       // Clean up the text (remove excessive whitespace)
-      fullTextContent = fullTextContent
-        .replace(/\s+/g, ' ')
-        .trim();
+      fullTextContent = fullTextContent.replace(/\s+/g, ' ').trim();
 
       // Extract all images from the entire page
       $('img').each((i, img) => {
@@ -586,7 +655,8 @@ async function processItem(item, index, totalItems, feedId) {
         const alt = $(img).attr('alt') || '';
         const width = parseInt($(img).attr('width') || '0', 10);
         const height = parseInt($(img).attr('height') || '0', 10);
-        const caption = $(img).attr('title') || $(img).next('figcaption').text().trim() || '';
+        const caption =
+          $(img).attr('title') || $(img).next('figcaption').text().trim() || '';
 
         if (src) {
           // Convert relative URLs to absolute
@@ -601,9 +671,15 @@ async function processItem(item, index, totalItems, feedId) {
 
           // Determine priority: higher for images in main content
           let priority = 1;
-          if (mainContentElement && $(mainContentElement).find(img).length > 0) {
+          if (
+            mainContentElement &&
+            $(mainContentElement).find(img).length > 0
+          ) {
             priority = 3; // Higher priority for images in main content
-          } else if ($(img).parents('article, .content, .post-content, .entry-content').length > 0) {
+          } else if (
+            $(img).parents('article, .content, .post-content, .entry-content')
+              .length > 0
+          ) {
             priority = 2; // Medium priority for images in article-like elements
           }
 
@@ -615,7 +691,7 @@ async function processItem(item, index, totalItems, feedId) {
             area: width * height,
             position: 'content',
             priority,
-            caption
+            caption,
           });
         }
 
@@ -624,7 +700,7 @@ async function processItem(item, index, totalItems, feedId) {
           const srcsetParts = srcset.split(',');
           for (const part of srcsetParts) {
             const [url, _] = part.trim().split(' ');
-            if (url && !pageImages.some(img => img.url === url)) {
+            if (url && !pageImages.some((img) => img.url === url)) {
               // Convert relative URLs to absolute
               let imgUrl = url;
               if (url.startsWith('/')) {
@@ -643,7 +719,7 @@ async function processItem(item, index, totalItems, feedId) {
                 area: width * height,
                 position: 'srcset',
                 priority: 1,
-                caption
+                caption,
               });
             }
           }
@@ -667,8 +743,8 @@ async function processItem(item, index, totalItems, feedId) {
           url: imgUrl,
           alt: pageTitle,
           position: 'og:image',
-          priority: 4,  // Highest priority for OG images
-          caption: pageTitle
+          priority: 4, // Highest priority for OG images
+          caption: pageTitle,
         });
       }
 
@@ -689,8 +765,8 @@ async function processItem(item, index, totalItems, feedId) {
           url: imgUrl,
           alt: pageTitle,
           position: 'twitter:image',
-          priority: 3.5,  // High priority but below OG
-          caption: pageTitle
+          priority: 3.5, // High priority but below OG
+          caption: pageTitle,
         });
       }
 
@@ -744,7 +820,9 @@ async function processItem(item, index, totalItems, feedId) {
 
           const titlePart = title ? ` "${title}"` : '';
           if (imgUrl) {
-            $article(el).replaceWith(`\n\n![${alt}](${imgUrl}${titlePart})\n\n`);
+            $article(el).replaceWith(
+              `\n\n![${alt}](${imgUrl}${titlePart})\n\n`,
+            );
           }
         });
 
@@ -796,7 +874,8 @@ async function processItem(item, index, totalItems, feedId) {
         });
 
         // Get the processed content and clean it up
-        markdown = $article.text()
+        markdown = $article
+          .text()
           .replace(/\n{3,}/g, '\n\n') // Remove excessive newlines
           .trim();
 
@@ -805,7 +884,10 @@ async function processItem(item, index, totalItems, feedId) {
 
       console.log(`✅ Successfully fetched and parsed HTML from ${item.link}`);
     } catch (fetchError) {
-      console.error(`⚠️ Error fetching HTML from ${item.link}:`, fetchError.message);
+      console.error(
+        `⚠️ Error fetching HTML from ${item.link}:`,
+        fetchError.message,
+      );
       // Continue with RSS data if HTML fetch fails
     }
 
@@ -818,27 +900,42 @@ async function processItem(item, index, totalItems, feedId) {
     const contentText = customExtractTextFromHTML(content);
 
     // Get all potential images from RSS feed using custom function
-    const descriptionImages = customExtractImagesFromHTML(description, item.link);
+    const descriptionImages = customExtractImagesFromHTML(
+      description,
+      item.link,
+    );
     const contentImages = customExtractImagesFromHTML(content, item.link);
 
     // Combine images from all sources (RSS feed and fetched HTML)
     let allImages = [
-      ...(item.media?.thumbnail ? [{ url: item.media.thumbnail, position: 'media:thumbnail', priority: 2 }] : []),
-      ...(item.media?.content ? [{ url: item.media.content, position: 'media:content', priority: 2 }] : []),
+      ...(item.media?.thumbnail
+        ? [
+            {
+              url: item.media.thumbnail,
+              position: 'media:thumbnail',
+              priority: 2,
+            },
+          ]
+        : []),
+      ...(item.media?.content
+        ? [{ url: item.media.content, position: 'media:content', priority: 2 }]
+        : []),
       ...descriptionImages,
       ...contentImages,
-      ...pageImages  // Add the images from the fetched HTML
+      ...pageImages, // Add the images from the fetched HTML
     ];
 
     // Remove duplicates by URL
     const uniqueImagesMap = new Map();
-    allImages.forEach(img => {
+    allImages.forEach((img) => {
       // If this URL doesn't exist yet or the current image has higher priority/area
       const existingImg = uniqueImagesMap.get(img.url);
-      if (!existingImg ||
+      if (
+        !existingImg ||
         (img.priority || 0) > (existingImg.priority || 0) ||
         ((img.priority || 0) === (existingImg.priority || 0) &&
-          (img.area || 0) > (existingImg.area || 0))) {
+          (img.area || 0) > (existingImg.area || 0))
+      ) {
         uniqueImagesMap.set(img.url, img);
       }
     });
@@ -865,12 +962,17 @@ async function processItem(item, index, totalItems, feedId) {
     const blogData = {
       title: pageTitle || item.title || 'No Title',
       original_title: item.title || '',
-      description_text: fullTextContent || descriptionText || contentText || pageMetaDescription || 'No Description',
+      description_text:
+        fullTextContent ||
+        descriptionText ||
+        contentText ||
+        pageMetaDescription ||
+        'No Description',
       original_description: descriptionText || '',
-      images: topImages.map(img => ({
+      images: topImages.map((img) => ({
         url: img.url,
         alt: img.alt || '',
-        caption: img.caption || ''
+        caption: img.caption || '',
       })),
       thumbnail: uniqueImages.length > 0 ? uniqueImages[0].url : '',
       url: item.link,
@@ -880,7 +982,7 @@ async function processItem(item, index, totalItems, feedId) {
       full_html_fetched: !!fullHtmlContent,
       meta_description: pageMetaDescription,
       markdown_content: fullMarkdownContent || '', // Include the markdown content
-      source_domain: new URL(item.link).hostname
+      source_domain: new URL(item.link).hostname,
     };
 
     // Convert blogData to JSON string for OpenAI prompt
@@ -914,11 +1016,20 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
     // 4. Use OpenAI to extract and enhance data with retry logic
     let enhancedBlogMarkdown = '';
     try {
-      const aiRes = await callOpenAIWithRetry([{ role: 'user', content: prompt }], 10000, 0.7);
+      const aiRes = await callOpenAIWithRetry(
+        [{ role: 'user', content: prompt }],
+        10000,
+        0.7,
+      );
       enhancedBlogMarkdown = aiRes.choices[0]?.message?.content || '';
-      console.log(`🤖 OpenAI blog creation: ${enhancedBlogMarkdown.substring(0, 100)}...`);
+      console.log(
+        `🤖 OpenAI blog creation: ${enhancedBlogMarkdown.substring(0, 100)}...`,
+      );
     } catch (openAiError) {
-      console.error(`❌ Failed to create blog with OpenAI:`, openAiError.message);
+      console.error(
+        `❌ Failed to create blog with OpenAI:`,
+        openAiError.message,
+      );
 
       // If OpenAI fails, create a basic markdown blog from available data
       enhancedBlogMarkdown = `# ${blogData.title}\n\n`;
@@ -934,18 +1045,25 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
       // Add first image if available
       if (blogData.images && blogData.images.length > 0) {
         const firstImage = blogData.images[0];
-        enhancedBlogMarkdown += `![${firstImage.alt || 'Image'}](${firstImage.url})\n\n`;
+        enhancedBlogMarkdown += `![${firstImage.alt || 'Image'}](${
+          firstImage.url
+        })\n\n`;
       }
 
       // Add description/content
-      enhancedBlogMarkdown += `${blogData.description_text.substring(0, 1000)}...\n\n`;
+      enhancedBlogMarkdown += `${blogData.description_text.substring(
+        0,
+        1000,
+      )}...\n\n`;
 
       // Add link to original
       enhancedBlogMarkdown += `[Read the full article](${blogData.url})\n\n`;
 
       // Add categories if available
       if (blogData.categories && blogData.categories.length > 0) {
-        enhancedBlogMarkdown += `**Categories:** ${blogData.categories.join(', ')}\n\n`;
+        enhancedBlogMarkdown += `**Categories:** ${blogData.categories.join(
+          ', ',
+        )}\n\n`;
       }
     }
 
@@ -973,7 +1091,8 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
       // If StealthGPT succeeds, use its result
       if (res.ok) {
         const result = await res.json();
-        const stealthText = result.text || result.output || result.rephrased_text;
+        const stealthText =
+          result.text || result.output || result.rephrased_text;
 
         if (stealthText) {
           console.log(`✅ StealthGPT succeeded for item ${index + 1}`);
@@ -981,7 +1100,9 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
         }
       } else {
         // If StealthGPT fails, use OpenAI as fallback with retry logic
-        console.log(`⚠️ StealthGPT failed, falling back to OpenAI for item ${index + 1}`);
+        console.log(
+          `⚠️ StealthGPT failed, falling back to OpenAI for item ${index + 1}`,
+        );
 
         const fallbackPrompt = `
 Improve this blog post markdown to make it more engaging, conversational, and human-sounding while keeping the same structure and information:
@@ -991,8 +1112,13 @@ ${enhancedBlogMarkdown}
 Only return the improved markdown, nothing else. Maintain all headings, images, and formatting.`;
 
         try {
-          const fallbackRes = await callOpenAIWithRetry([{ role: 'user', content: fallbackPrompt }], 10000, 0.7);
-          humanizedBlogMarkdown = fallbackRes.choices[0]?.message?.content || enhancedBlogMarkdown;
+          const fallbackRes = await callOpenAIWithRetry(
+            [{ role: 'user', content: fallbackPrompt }],
+            10000,
+            0.7,
+          );
+          humanizedBlogMarkdown =
+            fallbackRes.choices[0]?.message?.content || enhancedBlogMarkdown;
           console.log(`✅ OpenAI fallback succeeded for item ${index + 1}`);
         } catch (fallbackError) {
           console.error(`❌ OpenAI fallback failed: ${fallbackError.message}`);
@@ -1000,7 +1126,10 @@ Only return the improved markdown, nothing else. Maintain all headings, images, 
         }
       }
     } catch (err) {
-      console.error(`❌ Humanization error for item ${index + 1}:`, err.message);
+      console.error(
+        `❌ Humanization error for item ${index + 1}:`,
+        err.message,
+      );
       // Keep the original enhanced blog markdown if humanization fails
     }
 
@@ -1009,7 +1138,7 @@ Only return the improved markdown, nothing else. Maintain all headings, images, 
       .from('Humanize_Data')
       .insert({
         humanize_Data: humanizedBlogMarkdown,
-        rss_feed_data_column: rssItemId
+        rss_feed_data_column: rssItemId,
       });
 
     if (humanizeError) {
@@ -1019,7 +1148,6 @@ Only return the improved markdown, nothing else. Maintain all headings, images, 
       console.log(`✅ Successfully processed item ${index + 1}`);
       return { status: 'success', rssItemId };
     }
-
   } catch (itemError) {
     console.error(`❌ Error processing item ${index}:`, itemError);
     return { status: 'error', error: itemError };
@@ -1032,21 +1160,23 @@ async function processFeedContent(feedData, feedId) {
     total: feedData.items.length,
     processed: 0,
     errors: 0,
-    rss_feed_data_ids: []
+    rss_feed_data_ids: [],
   };
 
-  console.log(`🔍 Processing ${feedData.items.length} items from feed in parallel`);
+  console.log(
+    `🔍 Processing ${feedData.items.length} items from feed in parallel`,
+  );
 
   // Create an array of promises for each item
   const processingPromises = feedData.items.map((item, index) =>
-    processItem(item, index, feedData.items.length, feedId)
+    processItem(item, index, feedData.items.length, feedId),
   );
 
   // Execute all promises in parallel and wait for all to complete
   const itemResults = await Promise.all(processingPromises);
 
   // Collect results
-  itemResults.forEach(result => {
+  itemResults.forEach((result) => {
     if (result.status === 'success') {
       results.processed++;
       results.rss_feed_data_ids.push(result.rssItemId);
@@ -1132,7 +1262,7 @@ export async function POST(req) {
       link: '',
       lastBuildDate: '',
       language: '',
-      items: []
+      items: [],
     };
 
     // Parse feed metadata based on feed type
@@ -1140,10 +1270,13 @@ export async function POST(req) {
       const channel = doc.querySelector('channel');
       if (channel) {
         feedData.title = channel.querySelector('title')?.textContent || '';
-        feedData.description = channel.querySelector('description')?.textContent || '';
+        feedData.description =
+          channel.querySelector('description')?.textContent || '';
         feedData.link = channel.querySelector('link')?.textContent || '';
-        feedData.lastBuildDate = channel.querySelector('lastBuildDate')?.textContent || '';
-        feedData.language = channel.querySelector('language')?.textContent || '';
+        feedData.lastBuildDate =
+          channel.querySelector('lastBuildDate')?.textContent || '';
+        feedData.language =
+          channel.querySelector('language')?.textContent || '';
       }
 
       // Parse items
@@ -1155,12 +1288,16 @@ export async function POST(req) {
         itemData.title = item.querySelector('title')?.textContent || '';
         itemData.link = item.querySelector('link')?.textContent || '';
         itemData.pubDate = item.querySelector('pubDate')?.textContent || '';
-        itemData.description = item.querySelector('description')?.textContent || '';
+        itemData.description =
+          item.querySelector('description')?.textContent || '';
         itemData.guid = item.querySelector('guid')?.textContent || '';
-        itemData.categories = Array.from(item.querySelectorAll('category')).map(cat => cat.textContent);
+        itemData.categories = Array.from(item.querySelectorAll('category')).map(
+          (cat) => cat.textContent,
+        );
 
         // Handle content with namespace
-        const contentEncoded = item.querySelector('content\\:encoded') ||
+        const contentEncoded =
+          item.querySelector('content\\:encoded') ||
           item.getElementsByTagNameNS('*', 'encoded')[0];
 
         if (contentEncoded) {
@@ -1168,10 +1305,12 @@ export async function POST(req) {
         }
 
         // Handle media
-        const mediaThumbnail = item.querySelector('media\\:thumbnail') ||
+        const mediaThumbnail =
+          item.querySelector('media\\:thumbnail') ||
           item.getElementsByTagNameNS('*', 'thumbnail')[0];
 
-        const mediaContent = item.querySelector('media\\:content') ||
+        const mediaContent =
+          item.querySelector('media\\:content') ||
           item.getElementsByTagNameNS('*', 'content')[0];
 
         if (mediaThumbnail || mediaContent) {
@@ -1187,9 +1326,19 @@ export async function POST(req) {
         }
 
         // Get all remaining elements as custom fields
-        children.forEach(child => {
+        children.forEach((child) => {
           const nodeName = child.nodeName.toLowerCase();
-          if (!['title', 'link', 'pubdate', 'description', 'guid', 'category', 'content:encoded'].includes(nodeName)) {
+          if (
+            ![
+              'title',
+              'link',
+              'pubdate',
+              'description',
+              'guid',
+              'category',
+              'content:encoded',
+            ].includes(nodeName)
+          ) {
             if (nodeName.includes(':')) {
               const [namespace, name] = nodeName.split(':');
               if (!itemData[namespace]) itemData[namespace] = {};
@@ -1205,30 +1354,46 @@ export async function POST(req) {
     } else if (feedType === 'atom') {
       // Atom feed handling
       feedData.title = doc.querySelector('feed > title')?.textContent || '';
-      feedData.description = doc.querySelector('feed > subtitle')?.textContent || '';
-      feedData.link = doc.querySelector('feed > link[rel="alternate"]')?.getAttribute('href') ||
-        doc.querySelector('feed > link')?.getAttribute('href') || '';
-      feedData.lastBuildDate = doc.querySelector('feed > updated')?.textContent || '';
+      feedData.description =
+        doc.querySelector('feed > subtitle')?.textContent || '';
+      feedData.link =
+        doc
+          .querySelector('feed > link[rel="alternate"]')
+          ?.getAttribute('href') ||
+        doc.querySelector('feed > link')?.getAttribute('href') ||
+        '';
+      feedData.lastBuildDate =
+        doc.querySelector('feed > updated')?.textContent || '';
 
       // Parse entries
-      feedData.items = Array.from(doc.querySelectorAll('entry')).map((entry) => {
-        const itemData = {};
+      feedData.items = Array.from(doc.querySelectorAll('entry')).map(
+        (entry) => {
+          const itemData = {};
 
-        itemData.title = entry.querySelector('title')?.textContent || '';
-        itemData.link = entry.querySelector('link[rel="alternate"]')?.getAttribute('href') ||
-          entry.querySelector('link')?.getAttribute('href') || '';
-        itemData.pubDate = entry.querySelector('published')?.textContent ||
-          entry.querySelector('updated')?.textContent || '';
-        itemData.description = entry.querySelector('summary')?.textContent || '';
-        itemData.content = entry.querySelector('content')?.textContent || '';
-        itemData.id = entry.querySelector('id')?.textContent || '';
+          itemData.title = entry.querySelector('title')?.textContent || '';
+          itemData.link =
+            entry
+              .querySelector('link[rel="alternate"]')
+              ?.getAttribute('href') ||
+            entry.querySelector('link')?.getAttribute('href') ||
+            '';
+          itemData.pubDate =
+            entry.querySelector('published')?.textContent ||
+            entry.querySelector('updated')?.textContent ||
+            '';
+          itemData.description =
+            entry.querySelector('summary')?.textContent || '';
+          itemData.content = entry.querySelector('content')?.textContent || '';
+          itemData.id = entry.querySelector('id')?.textContent || '';
 
-        return itemData;
-      });
+          return itemData;
+        },
+      );
     } else if (feedType === 'rdf') {
       // RDF feed handling
       feedData.title = doc.querySelector('channel > title')?.textContent || '';
-      feedData.description = doc.querySelector('channel > description')?.textContent || '';
+      feedData.description =
+        doc.querySelector('channel > description')?.textContent || '';
       feedData.link = doc.querySelector('channel > link')?.textContent || '';
 
       // Parse items
@@ -1237,16 +1402,19 @@ export async function POST(req) {
 
         itemData.title = item.querySelector('title')?.textContent || '';
         itemData.link = item.querySelector('link')?.textContent || '';
-        itemData.description = item.querySelector('description')?.textContent || '';
+        itemData.description =
+          item.querySelector('description')?.textContent || '';
 
         // Handle Dublin Core metadata if present
-        const dcCreator = item.querySelector('dc\\:creator') ||
+        const dcCreator =
+          item.querySelector('dc\\:creator') ||
           item.getElementsByTagNameNS('*', 'creator')[0];
         if (dcCreator) {
           itemData.creator = dcCreator.textContent;
         }
 
-        const dcDate = item.querySelector('dc\\:date') ||
+        const dcDate =
+          item.querySelector('dc\\:date') ||
           item.getElementsByTagNameNS('*', 'date')[0];
         if (dcDate) {
           itemData.pubDate = dcDate.textContent;
@@ -1262,27 +1430,32 @@ export async function POST(req) {
     const processingResults = await processFeedContent(feedData, feedId);
 
     // 4. Return success response
-    return new Response(JSON.stringify({
-      success: true,
-      feedUrl: url,
-      feedId: feedId,
-      total: processingResults.total,
-      processed: processingResults.processed,
-      errors: processingResults.errors,
-      rss_feed_data_ids: processingResults.rss_feed_data_ids
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        feedUrl: url,
+        feedId: feedId,
+        total: processingResults.total,
+        processed: processingResults.processed,
+        errors: processingResults.errors,
+        rss_feed_data_ids: processingResults.rss_feed_data_ids,
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
   } catch (err) {
     console.error('🔥 RSS processing error:', err);
-    return new Response(JSON.stringify({
-      success: false,
-      error: err.message
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: err.message,
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
   }
 }

@@ -193,9 +193,9 @@ Respond ONLY in this exact JSON format:
               }
             }
 
-            // If StealthGPT fails, use OpenAI as fallback
             console.log(
-              `⚠️ StealthGPT failed, falling back to OpenAI for item ${index + 1
+              `⚠️ StealthGPT failed, falling back to OpenAI for item ${
+                index + 1
               }`,
             );
 
