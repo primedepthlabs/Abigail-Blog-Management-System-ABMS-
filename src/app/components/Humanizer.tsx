@@ -47,7 +47,13 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
         const res = await fetch('/api/humanize');
         const json = await res.json();
 
-        const parsed = json.data.map((entry: any, index: number) => ({
+        // Sort by newest first (assuming higher `id` = newer)
+        const sorted = json.data.sort(
+          (a: any, b: any) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+
+        const parsed = sorted.map((entry: any) => ({
           id: entry.id,
           ...parseBackendData(entry.humanize_Data),
         }));
@@ -105,10 +111,11 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
               key={i}
               variants={shimmerVariants}
               animate='animate'
-              className={`${theme === 'dark'
-                ? 'bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700'
-                : 'bg-gradient-to-r from-gray-100 via-gray-200 to-gray-100'
-                } bg-[length:400%_100%] rounded-xl h-64`}
+              className={`${
+                theme === 'dark'
+                  ? 'bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700'
+                  : 'bg-gradient-to-r from-gray-100 via-gray-200 to-gray-100'
+              } bg-[length:400%_100%] rounded-xl h-64`}
             />
           ))}
         </div>
@@ -119,10 +126,11 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
               key={i}
               variants={shimmerVariants}
               animate='animate'
-              className={`${theme === 'dark'
-                ? 'bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700'
-                : 'bg-gradient-to-r from-gray-100 via-gray-200 to-gray-100'
-                } bg-[length:400%_100%] h-16 rounded-xl`}
+              className={`${
+                theme === 'dark'
+                  ? 'bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700'
+                  : 'bg-gradient-to-r from-gray-100 via-gray-200 to-gray-100'
+              } bg-[length:400%_100%] h-16 rounded-xl`}
             />
           ))}
         </div>
@@ -135,17 +143,19 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className={`${theme === 'dark'
-        ? 'bg-gray-800 text-gray-100'
-        : 'bg-white text-gray-800'
-        } rounded-2xl p-6 md:p-10 shadow-xl relative overflow-hidden transition-colors duration-300`}
+      className={`${
+        theme === 'dark'
+          ? 'bg-gray-800 text-gray-100'
+          : 'bg-white text-gray-800'
+      } rounded-2xl p-6 md:p-10 shadow-xl relative overflow-hidden transition-colors duration-300`}
     >
       {/* Decorative background element */}
       <div
-        className={`absolute -top-24 -right-24 w-64 h-64 ${theme === 'dark'
-          ? 'bg-gradient-to-br from-purple-500/20 to-blue-500/20'
-          : 'bg-gradient-to-br from-purple-500/10 to-blue-500/10'
-          } rounded-full blur-3xl`}
+        className={`absolute -top-24 -right-24 w-64 h-64 ${
+          theme === 'dark'
+            ? 'bg-gradient-to-br from-purple-500/20 to-blue-500/20'
+            : 'bg-gradient-to-br from-purple-500/10 to-blue-500/10'
+        } rounded-full blur-3xl`}
       />
 
       <div className='relative z-10'>
@@ -153,16 +163,18 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
         <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8'>
           <div>
             <h2
-              className={`text-2xl font-bold ${theme === 'dark'
-                ? 'text-transparent bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text'
-                : 'text-transparent bg-gradient-to-r from-violet-600 to-blue-600 bg-clip-text'
-                }`}
+              className={`text-2xl font-bold ${
+                theme === 'dark'
+                  ? 'text-transparent bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text'
+                  : 'text-transparent bg-gradient-to-r from-violet-600 to-blue-600 bg-clip-text'
+              }`}
             >
               Blogs
             </h2>
             <p
-              className={`${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                } text-sm mt-1 transition-colors duration-300`}
+              className={`${
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+              } text-sm mt-1 transition-colors duration-300`}
             >
               Browse and discover interesting content
             </p>
@@ -172,37 +184,41 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
           <div className='flex flex-col sm:flex-row gap-3'>
             <div className='relative'>
               <SearchIcon
-                className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-                  }`}
+                className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${
+                  theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                }`}
               />
               <input
                 type='text'
                 placeholder='Search blogs...'
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={`pl-10 pr-4 py-2 rounded-xl ${theme === 'dark'
-                  ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-500 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/30'
-                  : 'bg-white border-gray-200 focus:border-violet-500 focus:ring-2 focus:ring-violet-200'
-                  } transition-all outline-none w-full`}
+                className={`pl-10 pr-4 py-2 rounded-xl ${
+                  theme === 'dark'
+                    ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-500 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/30'
+                    : 'bg-white border-gray-200 focus:border-violet-500 focus:ring-2 focus:ring-violet-200'
+                } transition-all outline-none w-full`}
               />
             </div>
 
             <div
-              className={`flex rounded-xl overflow-hidden ${theme === 'dark'
-                ? 'border border-gray-700'
-                : 'border border-gray-200'
-                }`}
+              className={`flex rounded-xl overflow-hidden ${
+                theme === 'dark'
+                  ? 'border border-gray-700'
+                  : 'border border-gray-200'
+              }`}
             >
               <button
                 onClick={() => setViewType('grid')}
-                className={`flex items-center justify-center px-3 py-2 ${viewType === 'grid'
-                  ? theme === 'dark'
-                    ? 'bg-violet-900/50 text-violet-400'
-                    : 'bg-violet-50 text-violet-600'
-                  : theme === 'dark'
+                className={`flex items-center justify-center px-3 py-2 ${
+                  viewType === 'grid'
+                    ? theme === 'dark'
+                      ? 'bg-violet-900/50 text-violet-400'
+                      : 'bg-violet-50 text-violet-600'
+                    : theme === 'dark'
                     ? 'text-gray-400 hover:bg-gray-700'
                     : 'text-gray-500 hover:bg-gray-50'
-                  }`}
+                }`}
               >
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
@@ -223,14 +239,15 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
               </button>
               <button
                 onClick={() => setViewType('list')}
-                className={`flex items-center justify-center px-3 py-2 ${viewType === 'list'
-                  ? theme === 'dark'
-                    ? 'bg-violet-900/50 text-violet-400'
-                    : 'bg-violet-50 text-violet-600'
-                  : theme === 'dark'
+                className={`flex items-center justify-center px-3 py-2 ${
+                  viewType === 'list'
+                    ? theme === 'dark'
+                      ? 'bg-violet-900/50 text-violet-400'
+                      : 'bg-violet-50 text-violet-600'
+                    : theme === 'dark'
                     ? 'text-gray-400 hover:bg-gray-700'
                     : 'text-gray-500 hover:bg-gray-50'
-                  }`}
+                }`}
               >
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
@@ -266,14 +283,16 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
               style={{ fontSize: '4rem' }}
             />
             <h3
-              className={`text-xl font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                }`}
+              className={`text-xl font-medium ${
+                theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+              }`}
             >
               No blogs found
             </h3>
             <p
-              className={`${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                } mt-2 max-w-md`}
+              className={`${
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+              } mt-2 max-w-md`}
             >
               {searchTerm
                 ? 'Try adjusting your search term or check back later for new content.'
@@ -293,14 +312,16 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
                 key={blog.id}
                 variants={itemVariants}
                 whileHover={{ y: -5, transition: { duration: 0.2 } }}
-                className={`group ${theme === 'dark'
-                  ? 'bg-gray-700 border-gray-600 hover:shadow-lg hover:shadow-black/20'
-                  : 'bg-white border-gray-100 hover:shadow-md'
-                  } rounded-xl overflow-hidden border shadow-sm transition-all duration-300`}
+                className={`group ${
+                  theme === 'dark'
+                    ? 'bg-gray-700 border-gray-600 hover:shadow-lg hover:shadow-black/20'
+                    : 'bg-white border-gray-100 hover:shadow-md'
+                } rounded-xl overflow-hidden border shadow-sm transition-all duration-300`}
               >
                 <div
-                  className={`h-40 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
-                    } relative overflow-hidden`}
+                  className={`h-40 ${
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+                  } relative overflow-hidden`}
                 >
                   {blog.imageUrl ? (
                     <div className='w-full h-full relative'>
@@ -312,10 +333,11 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
                     </div>
                   ) : (
                     <div
-                      className={`flex items-center justify-center h-full ${theme === 'dark'
-                        ? 'bg-gradient-to-br from-gray-800 to-gray-700'
-                        : 'bg-gradient-to-br from-gray-100 to-gray-200'
-                        }`}
+                      className={`flex items-center justify-center h-full ${
+                        theme === 'dark'
+                          ? 'bg-gradient-to-br from-gray-800 to-gray-700'
+                          : 'bg-gradient-to-br from-gray-100 to-gray-200'
+                      }`}
                     >
                       <ArticleOutlinedIcon
                         className={
@@ -332,17 +354,19 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
 
                 <div className='p-5'>
                   <p
-                    className={`${theme === 'dark' ? 'text-white' : 'text-black'
-                      } line-clamp-3 font-bold text-sm mb-4`}
+                    className={`${
+                      theme === 'dark' ? 'text-white' : 'text-black'
+                    } line-clamp-3 font-bold text-sm mb-4`}
                   >
                     {blog.summary}
                   </p>
                   <button
                     onClick={() => handleViewBlog(blog)}
-                    className={`w-full ${theme === 'dark'
-                      ? 'bg-violet-900/30 hover:bg-violet-800/50 text-violet-300'
-                      : 'bg-violet-50 hover:bg-violet-100 text-violet-700'
-                      } px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 group`}
+                    className={`w-full ${
+                      theme === 'dark'
+                        ? 'bg-violet-900/30 hover:bg-violet-800/50 text-violet-300'
+                        : 'bg-violet-50 hover:bg-violet-100 text-violet-700'
+                    } px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 group`}
                   >
                     <span>Read Article</span>
                     <ArrowForwardIosIcon className='w-3 h-3 group-hover:translate-x-1 transition-transform' />
@@ -363,14 +387,16 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
               <motion.div
                 key={blog.id}
                 variants={itemVariants}
-                className={`group flex items-center gap-4 p-4 rounded-xl ${theme === 'dark'
-                  ? 'bg-gray-700 border-gray-600 hover:border-violet-700 hover:bg-violet-900/30'
-                  : 'bg-white border-gray-100 hover:border-violet-200 hover:bg-violet-50/30'
-                  } border transition-all duration-200`}
+                className={`group flex items-center gap-4 p-4 rounded-xl ${
+                  theme === 'dark'
+                    ? 'bg-gray-700 border-gray-600 hover:border-violet-700 hover:bg-violet-900/30'
+                    : 'bg-white border-gray-100 hover:border-violet-200 hover:bg-violet-50/30'
+                } border transition-all duration-200`}
               >
                 <div
-                  className={`flex-shrink-0 w-16 h-16 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
-                    } rounded-lg overflow-hidden relative`}
+                  className={`flex-shrink-0 w-16 h-16 ${
+                    theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+                  } rounded-lg overflow-hidden relative`}
                 >
                   {blog.imageUrl ? (
                     <div className='w-full h-full relative'>
@@ -382,10 +408,11 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
                     </div>
                   ) : (
                     <div
-                      className={`flex items-center justify-center h-full ${theme === 'dark'
-                        ? 'bg-gradient-to-br from-gray-800 to-gray-700'
-                        : 'bg-gradient-to-br from-gray-100 to-gray-200'
-                        }`}
+                      className={`flex items-center justify-center h-full ${
+                        theme === 'dark'
+                          ? 'bg-gradient-to-br from-gray-800 to-gray-700'
+                          : 'bg-gradient-to-br from-gray-100 to-gray-200'
+                      }`}
                     >
                       <ArticleOutlinedIcon
                         className={
@@ -399,17 +426,19 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
                 <div className='flex-grow'>
                   <div className='flex items-center gap-2 mb-1'>
                     <span
-                      className={`${theme === 'dark'
-                        ? 'bg-violet-900/40 text-violet-300'
-                        : 'bg-violet-100 text-violet-700'
-                        } text-xs px-2 py-0.5 rounded-md font-medium`}
+                      className={`${
+                        theme === 'dark'
+                          ? 'bg-violet-900/40 text-violet-300'
+                          : 'bg-violet-100 text-violet-700'
+                      } text-xs px-2 py-0.5 rounded-md font-medium`}
                     >
                       Blog #{blog.id}
                     </span>
                   </div>
                   <p
-                    className={`${theme === 'dark' ? 'text-white' : 'text-black'
-                      } line-clamp-1 font-bold text-sm`}
+                    className={`${
+                      theme === 'dark' ? 'text-white' : 'text-black'
+                    } line-clamp-1 font-bold text-sm`}
                   >
                     {blog.summary}
                   </p>
@@ -417,10 +446,11 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
 
                 <button
                   onClick={() => handleViewBlog(blog)}
-                  className={`flex-shrink-0 flex items-center justify-center ${theme === 'dark'
-                    ? 'bg-violet-700 hover:bg-violet-600'
-                    : 'bg-violet-600 hover:bg-violet-700'
-                    } text-white w-10 h-10 rounded-full transition-colors`}
+                  className={`flex-shrink-0 flex items-center justify-center ${
+                    theme === 'dark'
+                      ? 'bg-violet-700 hover:bg-violet-600'
+                      : 'bg-violet-600 hover:bg-violet-700'
+                  } text-white w-10 h-10 rounded-full transition-colors`}
                 >
                   <VisibilityOutlinedIcon fontSize='small' />
                 </button>
@@ -432,10 +462,11 @@ export default function BlogTable({ theme, setTheme }: BlogTableProps) {
         {/* Footer with pagination or stats */}
         {!loading && filteredData.length > 0 && (
           <div
-            className={`mt-8 pt-6 ${theme === 'dark'
-              ? 'border-t border-gray-700 text-gray-400'
-              : 'border-t border-gray-100 text-gray-500'
-              } flex justify-between items-center text-sm`}
+            className={`mt-8 pt-6 ${
+              theme === 'dark'
+                ? 'border-t border-gray-700 text-gray-400'
+                : 'border-t border-gray-100 text-gray-500'
+            } flex justify-between items-center text-sm`}
           >
             <p>
               Showing {filteredData.length} of {data.length} blogs

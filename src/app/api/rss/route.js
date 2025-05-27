@@ -1,13 +1,195 @@
 import { JSDOM } from 'jsdom';
 import { OpenAI } from 'openai';
+import { marked } from 'marked';
 import supabase from '@/lib/supabaseClient';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Sample feed URLs could be stored here
+// SHOPIFY CONFIGURATION
+const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
+const SHOPIFY_SHOP_DOMAIN = process.env.SHOPIFY_SHOP_DOMAIN;
+
 const feedList = [];
+
+// Function to convert markdown to HTML
+function markdownToHtml(markdown) {
+  try {
+    console.log('original markdown:', markdown.substring(0, 500));
+    marked.setOptions({
+      breaks: true,
+      gfm: true,
+      headerIds: false,
+      mangle: false,
+    });
+    return marked(markdown);
+  } catch (error) {
+    console.error('❌ Error converting markdown to HTML:', error);
+    return markdown.replace(/\n/g, '<br>');
+  }
+}
+
+// Extract title from markdown
+function extractTitle(markdown) {
+  const lines = markdown.split('\n');
+  for (const line of lines) {
+    if (line.startsWith('# ')) {
+      return line.substring(2).trim();
+    }
+  }
+  return 'Blog Post';
+}
+
+async function getBlogId() {
+  try {
+    const response = await fetch(
+      `https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-10/blogs.json`,
+      {
+        headers: {
+          'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch blogs: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.blogs && data.blogs.length > 0) {
+      console.log(
+        `📝 Using blog: ${data.blogs[0].title} (ID: ${data.blogs[0].id})`,
+      );
+      return data.blogs[0].id;
+    }
+    throw new Error('No blogs found');
+  } catch (error) {
+    console.error('❌ Error getting blog ID:', error);
+    throw error;
+  }
+}
+
+// Main function to create blog post in Shopify
+async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
+  try {
+    const blogId = await getBlogId();
+    const title = extractTitle(humanizedMarkdown);
+    const htmlContent = markdownToHtml(humanizedMarkdown);
+
+    // Create excerpt (first 150 characters of text)
+    const plainText = humanizedMarkdown
+      .replace(/^#.*$/gm, '')
+      .replace(/!\[.*?\]\(.*?\)/g, '')
+      .replace(/\[.*?\]\(.*?\)/g, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .trim();
+
+    const excerpt =
+      plainText.length > 150 ? plainText.substring(0, 150) + '...' : plainText;
+
+    // Prepare tags
+    const tags =
+      blogData.categories && blogData.categories.length > 0
+        ? blogData.categories.join(', ') + ', RSS Feed, Auto-Generated'
+        : 'RSS Feed, Auto-Generated';
+
+    const articleData = {
+      article: {
+        title: title,
+        body_html: htmlContent,
+        summary: excerpt,
+        tags: tags,
+        published: true,
+        author: blogData.author || 'RSS Bot',
+        created_at: blogData.pubDate
+          ? new Date(blogData.pubDate).toISOString()
+          : new Date().toISOString(),
+      },
+    };
+
+    // Add featured image if available
+    if (blogData.thumbnail) {
+      articleData.article.image = {
+        src: blogData.thumbnail,
+        alt: title,
+      };
+    }
+
+    console.log(`📝 Creating Shopify blog post: "${title}"`);
+    console.log('📏 HTML content length:', htmlContent.length);
+    console.log('📝 HTML content preview:', htmlContent.slice(0, 1000));
+
+    const response = await fetch(
+      `https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-10/blogs/${blogId}/articles.json`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(articleData),
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        `Shopify API error: ${response.status} - ${JSON.stringify(errorData)}`,
+      );
+    }
+
+    const result = await response.json();
+    console.log(`✅ Created Shopify blog post: ${result.article.id}`);
+
+    return {
+      success: true,
+      articleId: result.article.id,
+      title: result.article.title,
+      handle: result.article.handle,
+      url: `https://${SHOPIFY_SHOP_DOMAIN.replace(
+        '.myshopify.com',
+        '',
+      )}/blogs/${result.article.blog_id}/${result.article.handle}`,
+    };
+  } catch (error) {
+    console.error('❌ Failed to create Shopify blog post:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+// Test your Shopify connection
+export async function testShopify() {
+  try {
+    const response = await fetch(
+      `https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-10/shop.json`,
+      {
+        headers: {
+          'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`Connection failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log(`✅ Connected to: ${data.shop.name}`);
+    return { success: true, shopName: data.shop.name };
+  } catch (error) {
+    console.error('❌ Shopify test failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ========== RSS FUNCTIONS ==========
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
@@ -491,7 +673,14 @@ function customExtractImagesFromHTML(html, baseUrl = '') {
   }
 }
 
-async function processItem(item, index, totalItems, feedId) {
+// UPDATED processItem function with selective processing support
+async function processItem(
+  item,
+  index,
+  totalItems,
+  feedId,
+  shouldHumanize = true,
+) {
   try {
     // Skip items without a link
     if (!item.link) {
@@ -503,7 +692,7 @@ async function processItem(item, index, totalItems, feedId) {
       `📝 Processing item ${index + 1}/${totalItems}: ${item.title?.substring(
         0,
         30,
-      )}...`,
+      )}... ${shouldHumanize ? '(with humanization)' : '(raw only)'}`,
     );
 
     // 1. Insert the blog URL into rss_feed_data
@@ -521,6 +710,18 @@ async function processItem(item, index, totalItems, feedId) {
     }
 
     const rssItemId = rssItemData[0].id;
+
+    // If no humanization needed, just return basic processing
+    if (!shouldHumanize) {
+      console.log(`⏭️ Skipping humanization for item ${index + 1}`);
+      return {
+        status: 'success',
+        rssItemId,
+        shopifySuccess: false,
+        shopifyArticleId: null,
+        humanized: false,
+      };
+    }
 
     // 2. Fetch full HTML content from the blog URL
     console.log(`🌐 Fetching full HTML from: ${item.link}`);
@@ -1134,43 +1335,106 @@ Only return the improved markdown, nothing else. Maintain all headings, images, 
     }
 
     // 6. Insert the comprehensive markdown into Humanize_Data
-    const { error: humanizeError } = await supabase
+    const { data: humanizeData, error: humanizeError } = await supabase
       .from('Humanize_Data')
       .insert({
         humanize_Data: humanizedBlogMarkdown,
         rss_feed_data_column: rssItemId,
-      });
+      })
+      .select('id');
 
     if (humanizeError) {
       console.error(`❌ Error inserting into Humanize_Data:`, humanizeError);
       return { status: 'error', error: humanizeError, rssItemId };
-    } else {
-      console.log(`✅ Successfully processed item ${index + 1}`);
-      return { status: 'success', rssItemId };
     }
+
+    const humanizeDataId = humanizeData[0].id;
+
+    // 7. NEW: Push to Shopify
+    console.log(`🛍️ Pushing to Shopify: ${index + 1}/${totalItems}`);
+    const shopifyResult = await createShopifyBlogPost(
+      humanizedBlogMarkdown,
+      blogData,
+    );
+
+    if (shopifyResult.success) {
+      // Update database with Shopify info
+      await supabase
+        .from('Humanize_Data')
+        .update({
+          shopify_article_id: shopifyResult.articleId,
+          shopify_url: shopifyResult.url,
+          shopify_handle: shopifyResult.handle,
+          published_to_shopify: true,
+          shopify_created_at: new Date().toISOString(),
+        })
+        .eq('id', humanizeDataId);
+
+      console.log(
+        `✅ Successfully pushed to Shopify: ${shopifyResult.articleId}`,
+      );
+    } else {
+      // Log error but continue processing
+      await supabase
+        .from('Humanize_Data')
+        .update({
+          published_to_shopify: false,
+          shopify_error: shopifyResult.error,
+        })
+        .eq('id', humanizeDataId);
+
+      console.error(`❌ Shopify push failed: ${shopifyResult.error}`);
+    }
+
+    console.log(`✅ Successfully processed item ${index + 1}`);
+    return {
+      status: 'success',
+      rssItemId,
+      shopifySuccess: shopifyResult.success,
+      shopifyArticleId: shopifyResult.success ? shopifyResult.articleId : null,
+      humanized: true,
+    };
   } catch (itemError) {
     console.error(`❌ Error processing item ${index}:`, itemError);
     return { status: 'error', error: itemError };
   }
 }
 
-// Process and humanize feed content in parallel
-async function processFeedContent(feedData, feedId) {
+// UPDATED Process and humanize feed content with selective processing
+async function processFeedContent(feedData, feedId, selectedIndices = null) {
   const results = {
     total: feedData.items.length,
     processed: 0,
     errors: 0,
+    shopifyPosts: 0,
+    shopifyErrors: 0,
+    humanized: 0,
+    skipped: 0,
     rss_feed_data_ids: [],
   };
 
   console.log(
-    `🔍 Processing ${feedData.items.length} items from feed in parallel`,
+    `🔍 Processing ${feedData.items.length} items from feed${
+      selectedIndices
+        ? ` (${selectedIndices.length} selected for humanization)`
+        : ' (all humanized)'
+    }`,
   );
 
   // Create an array of promises for each item
-  const processingPromises = feedData.items.map((item, index) =>
-    processItem(item, index, feedData.items.length, feedId),
-  );
+  const processingPromises = feedData.items.map((item, index) => {
+    // Determine if this item should be humanized
+    const shouldHumanize = selectedIndices
+      ? selectedIndices.includes(index)
+      : true;
+    return processItem(
+      item,
+      index,
+      feedData.items.length,
+      feedId,
+      shouldHumanize,
+    );
+  });
 
   // Execute all promises in parallel and wait for all to complete
   const itemResults = await Promise.all(processingPromises);
@@ -1180,6 +1444,19 @@ async function processFeedContent(feedData, feedId) {
     if (result.status === 'success') {
       results.processed++;
       results.rss_feed_data_ids.push(result.rssItemId);
+
+      if (result.humanized) {
+        results.humanized++;
+      } else {
+        results.skipped++;
+      }
+
+      if (result.shopifySuccess) {
+        results.shopifyPosts++;
+      } else if (result.humanized) {
+        // Only count as error if it was supposed to be humanized
+        results.shopifyErrors++;
+      }
     } else {
       results.errors++;
       if (result.rssItemId) {
@@ -1191,15 +1468,21 @@ async function processFeedContent(feedData, feedId) {
   return results;
 }
 
+// UPDATED POST function with selective processing support
 export async function POST(req) {
   try {
-    const { url } = await req.json();
+    const { url, selectedItems, feedData } = await req.json();
 
     if (!url || typeof url !== 'string' || !url.trim()) {
       throw new Error('Invalid or missing URL');
     }
 
     console.log(`🌐 Processing RSS feed: ${url}`);
+    if (selectedItems) {
+      console.log(
+        `🎯 Selected items for humanization: ${selectedItems.length}`,
+      );
+    }
 
     // 1. Check if feed already exists in the database
     const { data: existingFeeds, error: feedCheckError } = await supabase
@@ -1235,201 +1518,230 @@ export async function POST(req) {
       console.log(`📝 Created new feed with ID: ${feedId}`);
     }
 
-    // 2. Fetch and parse the RSS feed
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch feed: ${res.status}`);
-    }
+    // 2. Use provided feedData if available, otherwise fetch and parse
+    let processedFeedData;
 
-    const xml = await res.text();
-    const dom = new JSDOM(xml, { contentType: 'text/xml' });
-    const doc = dom.window.document;
+    if (feedData && selectedItems) {
+      // Use the pre-filtered feed data from UI
+      processedFeedData = feedData;
+      console.log(
+        `🎯 Using pre-filtered feed data with ${feedData.items.length} items`,
+      );
+    } else {
+      // Fetch and parse the RSS feed (original behavior)
+      console.log(`🌐 Fetching fresh RSS feed data`);
 
-    // Detect feed type (RSS, Atom, RDF)
-    let feedType = 'unknown';
-    if (doc.querySelector('rss')) {
-      feedType = 'rss';
-    } else if (doc.querySelector('feed')) {
-      feedType = 'atom';
-    } else if (doc.querySelector('rdf\\:RDF, RDF')) {
-      feedType = 'rdf';
-    }
-
-    // Get feed metadata and items
-    const feedData = {
-      title: '',
-      description: '',
-      link: '',
-      lastBuildDate: '',
-      language: '',
-      items: [],
-    };
-
-    // Parse feed metadata based on feed type
-    if (feedType === 'rss') {
-      const channel = doc.querySelector('channel');
-      if (channel) {
-        feedData.title = channel.querySelector('title')?.textContent || '';
-        feedData.description =
-          channel.querySelector('description')?.textContent || '';
-        feedData.link = channel.querySelector('link')?.textContent || '';
-        feedData.lastBuildDate =
-          channel.querySelector('lastBuildDate')?.textContent || '';
-        feedData.language =
-          channel.querySelector('language')?.textContent || '';
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch feed: ${res.status}`);
       }
 
-      // Parse items
-      feedData.items = Array.from(doc.querySelectorAll('item')).map((item) => {
-        const children = Array.from(item.children);
-        const itemData = {};
+      const xml = await res.text();
+      const dom = new JSDOM(xml, { contentType: 'text/xml' });
+      const doc = dom.window.document;
 
-        // Extract standard RSS fields
-        itemData.title = item.querySelector('title')?.textContent || '';
-        itemData.link = item.querySelector('link')?.textContent || '';
-        itemData.pubDate = item.querySelector('pubDate')?.textContent || '';
-        itemData.description =
-          item.querySelector('description')?.textContent || '';
-        itemData.guid = item.querySelector('guid')?.textContent || '';
-        itemData.categories = Array.from(item.querySelectorAll('category')).map(
-          (cat) => cat.textContent,
-        );
+      // Detect feed type (RSS, Atom, RDF)
+      let feedType = 'unknown';
+      if (doc.querySelector('rss')) {
+        feedType = 'rss';
+      } else if (doc.querySelector('feed')) {
+        feedType = 'atom';
+      } else if (doc.querySelector('rdf\\:RDF, RDF')) {
+        feedType = 'rdf';
+      }
 
-        // Handle content with namespace
-        const contentEncoded =
-          item.querySelector('content\\:encoded') ||
-          item.getElementsByTagNameNS('*', 'encoded')[0];
+      // Get feed metadata and items
+      processedFeedData = {
+        title: '',
+        description: '',
+        link: '',
+        lastBuildDate: '',
+        language: '',
+        items: [],
+      };
 
-        if (contentEncoded) {
-          itemData.content = contentEncoded.textContent || '';
+      // Parse feed metadata based on feed type
+      if (feedType === 'rss') {
+        const channel = doc.querySelector('channel');
+        if (channel) {
+          processedFeedData.title =
+            channel.querySelector('title')?.textContent || '';
+          processedFeedData.description =
+            channel.querySelector('description')?.textContent || '';
+          processedFeedData.link =
+            channel.querySelector('link')?.textContent || '';
+          processedFeedData.lastBuildDate =
+            channel.querySelector('lastBuildDate')?.textContent || '';
+          processedFeedData.language =
+            channel.querySelector('language')?.textContent || '';
         }
 
-        // Handle media
-        const mediaThumbnail =
-          item.querySelector('media\\:thumbnail') ||
-          item.getElementsByTagNameNS('*', 'thumbnail')[0];
+        // Parse items
+        processedFeedData.items = Array.from(doc.querySelectorAll('item')).map(
+          (item) => {
+            const children = Array.from(item.children);
+            const itemData = {};
 
-        const mediaContent =
-          item.querySelector('media\\:content') ||
-          item.getElementsByTagNameNS('*', 'content')[0];
+            // Extract standard RSS fields
+            itemData.title = item.querySelector('title')?.textContent || '';
+            itemData.link = item.querySelector('link')?.textContent || '';
+            itemData.pubDate = item.querySelector('pubDate')?.textContent || '';
+            itemData.description =
+              item.querySelector('description')?.textContent || '';
+            itemData.guid = item.querySelector('guid')?.textContent || '';
+            itemData.categories = Array.from(
+              item.querySelectorAll('category'),
+            ).map((cat) => cat.textContent);
 
-        if (mediaThumbnail || mediaContent) {
-          itemData.media = {};
+            // Handle content with namespace
+            const contentEncoded =
+              item.querySelector('content\\:encoded') ||
+              item.getElementsByTagNameNS('*', 'encoded')[0];
 
-          if (mediaThumbnail) {
-            itemData.media.thumbnail = mediaThumbnail.getAttribute('url');
-          }
-
-          if (mediaContent) {
-            itemData.media.content = mediaContent.getAttribute('url');
-          }
-        }
-
-        // Get all remaining elements as custom fields
-        children.forEach((child) => {
-          const nodeName = child.nodeName.toLowerCase();
-          if (
-            ![
-              'title',
-              'link',
-              'pubdate',
-              'description',
-              'guid',
-              'category',
-              'content:encoded',
-            ].includes(nodeName)
-          ) {
-            if (nodeName.includes(':')) {
-              const [namespace, name] = nodeName.split(':');
-              if (!itemData[namespace]) itemData[namespace] = {};
-              itemData[namespace][name] = child.textContent;
-            } else if (!itemData[nodeName]) {
-              itemData[nodeName] = child.textContent;
+            if (contentEncoded) {
+              itemData.content = contentEncoded.textContent || '';
             }
-          }
-        });
 
-        return itemData;
-      });
-    } else if (feedType === 'atom') {
-      // Atom feed handling
-      feedData.title = doc.querySelector('feed > title')?.textContent || '';
-      feedData.description =
-        doc.querySelector('feed > subtitle')?.textContent || '';
-      feedData.link =
-        doc
-          .querySelector('feed > link[rel="alternate"]')
-          ?.getAttribute('href') ||
-        doc.querySelector('feed > link')?.getAttribute('href') ||
-        '';
-      feedData.lastBuildDate =
-        doc.querySelector('feed > updated')?.textContent || '';
+            // Handle media
+            const mediaThumbnail =
+              item.querySelector('media\\:thumbnail') ||
+              item.getElementsByTagNameNS('*', 'thumbnail')[0];
 
-      // Parse entries
-      feedData.items = Array.from(doc.querySelectorAll('entry')).map(
-        (entry) => {
-          const itemData = {};
+            const mediaContent =
+              item.querySelector('media\\:content') ||
+              item.getElementsByTagNameNS('*', 'content')[0];
 
-          itemData.title = entry.querySelector('title')?.textContent || '';
-          itemData.link =
-            entry
-              .querySelector('link[rel="alternate"]')
-              ?.getAttribute('href') ||
-            entry.querySelector('link')?.getAttribute('href') ||
-            '';
-          itemData.pubDate =
-            entry.querySelector('published')?.textContent ||
-            entry.querySelector('updated')?.textContent ||
-            '';
-          itemData.description =
-            entry.querySelector('summary')?.textContent || '';
-          itemData.content = entry.querySelector('content')?.textContent || '';
-          itemData.id = entry.querySelector('id')?.textContent || '';
+            if (mediaThumbnail || mediaContent) {
+              itemData.media = {};
 
-          return itemData;
-        },
-      );
-    } else if (feedType === 'rdf') {
-      // RDF feed handling
-      feedData.title = doc.querySelector('channel > title')?.textContent || '';
-      feedData.description =
-        doc.querySelector('channel > description')?.textContent || '';
-      feedData.link = doc.querySelector('channel > link')?.textContent || '';
+              if (mediaThumbnail) {
+                itemData.media.thumbnail = mediaThumbnail.getAttribute('url');
+              }
 
-      // Parse items
-      feedData.items = Array.from(doc.querySelectorAll('item')).map((item) => {
-        const itemData = {};
+              if (mediaContent) {
+                itemData.media.content = mediaContent.getAttribute('url');
+              }
+            }
 
-        itemData.title = item.querySelector('title')?.textContent || '';
-        itemData.link = item.querySelector('link')?.textContent || '';
-        itemData.description =
-          item.querySelector('description')?.textContent || '';
+            // Get all remaining elements as custom fields
+            children.forEach((child) => {
+              const nodeName = child.nodeName.toLowerCase();
+              if (
+                ![
+                  'title',
+                  'link',
+                  'pubdate',
+                  'description',
+                  'guid',
+                  'category',
+                  'content:encoded',
+                ].includes(nodeName)
+              ) {
+                if (nodeName.includes(':')) {
+                  const [namespace, name] = nodeName.split(':');
+                  if (!itemData[namespace]) itemData[namespace] = {};
+                  itemData[namespace][name] = child.textContent;
+                } else if (!itemData[nodeName]) {
+                  itemData[nodeName] = child.textContent;
+                }
+              }
+            });
 
-        // Handle Dublin Core metadata if present
-        const dcCreator =
-          item.querySelector('dc\\:creator') ||
-          item.getElementsByTagNameNS('*', 'creator')[0];
-        if (dcCreator) {
-          itemData.creator = dcCreator.textContent;
-        }
+            return itemData;
+          },
+        );
+      } else if (feedType === 'atom') {
+        // Atom feed handling
+        processedFeedData.title =
+          doc.querySelector('feed > title')?.textContent || '';
+        processedFeedData.description =
+          doc.querySelector('feed > subtitle')?.textContent || '';
+        processedFeedData.link =
+          doc
+            .querySelector('feed > link[rel="alternate"]')
+            ?.getAttribute('href') ||
+          doc.querySelector('feed > link')?.getAttribute('href') ||
+          '';
+        processedFeedData.lastBuildDate =
+          doc.querySelector('feed > updated')?.textContent || '';
 
-        const dcDate =
-          item.querySelector('dc\\:date') ||
-          item.getElementsByTagNameNS('*', 'date')[0];
-        if (dcDate) {
-          itemData.pubDate = dcDate.textContent;
-        }
+        // Parse entries
+        processedFeedData.items = Array.from(doc.querySelectorAll('entry')).map(
+          (entry) => {
+            const itemData = {};
 
-        return itemData;
-      });
+            itemData.title = entry.querySelector('title')?.textContent || '';
+            itemData.link =
+              entry
+                .querySelector('link[rel="alternate"]')
+                ?.getAttribute('href') ||
+              entry.querySelector('link')?.getAttribute('href') ||
+              '';
+            itemData.pubDate =
+              entry.querySelector('published')?.textContent ||
+              entry.querySelector('updated')?.textContent ||
+              '';
+            itemData.description =
+              entry.querySelector('summary')?.textContent || '';
+            itemData.content =
+              entry.querySelector('content')?.textContent || '';
+            itemData.id = entry.querySelector('id')?.textContent || '';
+
+            return itemData;
+          },
+        );
+      } else if (feedType === 'rdf') {
+        // RDF feed handling
+        processedFeedData.title =
+          doc.querySelector('channel > title')?.textContent || '';
+        processedFeedData.description =
+          doc.querySelector('channel > description')?.textContent || '';
+        processedFeedData.link =
+          doc.querySelector('channel > link')?.textContent || '';
+
+        // Parse items
+        processedFeedData.items = Array.from(doc.querySelectorAll('item')).map(
+          (item) => {
+            const itemData = {};
+
+            itemData.title = item.querySelector('title')?.textContent || '';
+            itemData.link = item.querySelector('link')?.textContent || '';
+            itemData.description =
+              item.querySelector('description')?.textContent || '';
+
+            // Handle Dublin Core metadata if present
+            const dcCreator =
+              item.querySelector('dc\\:creator') ||
+              item.getElementsByTagNameNS('*', 'creator')[0];
+            if (dcCreator) {
+              itemData.creator = dcCreator.textContent;
+            }
+
+            const dcDate =
+              item.querySelector('dc\\:date') ||
+              item.getElementsByTagNameNS('*', 'date')[0];
+            if (dcDate) {
+              itemData.pubDate = dcDate.textContent;
+            }
+
+            return itemData;
+          },
+        );
+      }
     }
 
-    console.log(`🔍 Feed parsed. Found ${feedData.items.length} items`);
+    console.log(
+      `🔍 Feed parsed. Found ${processedFeedData.items.length} items`,
+    );
 
-    // 3. Process the feed content in parallel
-    const processingResults = await processFeedContent(feedData, feedId);
+    // 3. Process the feed content with selective humanization
+    const processingResults = await processFeedContent(
+      processedFeedData,
+      feedId,
+      selectedItems,
+    );
 
-    // 4. Return success response
+    // 4. Return success response with detailed stats
     return new Response(
       JSON.stringify({
         success: true,
@@ -1438,7 +1750,12 @@ export async function POST(req) {
         total: processingResults.total,
         processed: processingResults.processed,
         errors: processingResults.errors,
+        humanized: processingResults.humanized,
+        skipped: processingResults.skipped,
+        shopifyPosts: processingResults.shopifyPosts,
+        shopifyErrors: processingResults.shopifyErrors,
         rss_feed_data_ids: processingResults.rss_feed_data_ids,
+        selective: !!selectedItems,
       }),
       {
         status: 200,

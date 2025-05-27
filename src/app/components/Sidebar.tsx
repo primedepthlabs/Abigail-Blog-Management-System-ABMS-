@@ -54,11 +54,13 @@ export default function Sidebar({
       initial={{ x: -20, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ duration: 0.5, ease: 'easeOut' }}
-      className={`${isExpanded ? 'w-72' : 'w-20'
-        } transition-all duration-300 ease-in-out
-        ${theme === 'dark'
-          ? 'bg-gradient-to-b from-gray-900 to-gray-800 border-gray-700'
-          : 'bg-white border-gray-100'
+      className={`${
+        isExpanded ? 'w-72' : 'w-20'
+      } transition-all duration-300 ease-in-out
+        ${
+          theme === 'dark'
+            ? 'bg-gradient-to-b from-gray-900 to-gray-800 border-gray-700'
+            : 'bg-white border-gray-100'
         }
         relative flex flex-col h-full rounded-3xl border shadow-lg ml-2 mt-2 overflow-hidden`}
     >
@@ -68,29 +70,34 @@ export default function Sidebar({
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsExpanded(!isExpanded)}
         className={`absolute -right-3 top-20 h-6 w-6 rounded-full flex items-center justify-center z-10
-          ${theme === 'dark'
-            ? 'bg-gray-700 text-gray-300'
-            : 'bg-white text-gray-600'
+          ${
+            theme === 'dark'
+              ? 'bg-gray-700 text-gray-300'
+              : 'bg-white text-gray-600'
           } 
-          shadow-md border ${theme === 'dark' ? 'border-gray-600' : 'border-gray-200'
+          shadow-md border ${
+            theme === 'dark' ? 'border-gray-600' : 'border-gray-200'
           }`}
       >
         <KeyboardArrowRightIcon
-          className={`text-sm transition-transform ${!isExpanded ? '' : 'rotate-180'
-            }`}
+          className={`text-sm transition-transform ${
+            !isExpanded ? '' : 'rotate-180'
+          }`}
           style={{ fontSize: '14px' }}
         />
       </motion.button>
 
       {/* Logo & Brand */}
       <div
-        className={`pt-8 pb-6 ${isExpanded ? 'px-6' : 'px-2'
-          } text-center relative`}
+        className={`pt-8 pb-6 ${
+          isExpanded ? 'px-6' : 'px-2'
+        } text-center relative`}
       >
         <div className='absolute inset-0 overflow-hidden'>
           <div
-            className={`${theme === 'dark' ? 'opacity-10' : 'opacity-5'
-              } w-40 h-40 rounded-full bg-gradient-to-r 
+            className={`${
+              theme === 'dark' ? 'opacity-10' : 'opacity-5'
+            } w-40 h-40 rounded-full bg-gradient-to-r 
             from-purple-600 to-blue-500 absolute -top-20 -right-20`}
           ></div>
         </div>
@@ -110,10 +117,11 @@ export default function Sidebar({
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
                   transition={{ duration: 0.2 }}
-                  className={`text-2xl font-bold ${theme === 'dark'
-                    ? 'text-white'
-                    : 'bg-gradient-to-r from-purple-600 to-blue-500 text-transparent bg-clip-text'
-                    }`}
+                  className={`text-2xl font-bold ${
+                    theme === 'dark'
+                      ? 'text-white'
+                      : 'bg-gradient-to-r from-purple-600 to-blue-500 text-transparent bg-clip-text'
+                  }`}
                 >
                   AbiGail
                 </motion.h2>
@@ -130,10 +138,11 @@ export default function Sidebar({
                 transition={{ duration: 0.2, delay: 0.1 }}
               >
                 <span
-                  className={`text-xs font-medium px-2 py-1 rounded-full ${theme === 'dark'
-                    ? 'bg-gray-800 text-gray-400'
-                    : 'bg-gray-100 text-gray-500'
-                    }`}
+                  className={`text-xs font-medium px-2 py-1 rounded-full ${
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-gray-400'
+                      : 'bg-gray-100 text-gray-500'
+                  }`}
                 >
                   AI ASSISTANT
                 </span>
@@ -154,11 +163,12 @@ export default function Sidebar({
                 layout
                 onClick={() => setActiveSection(item.id)}
                 className={`group w-full flex items-center gap-3 py-3 px-4 rounded-xl transition-all duration-200 
-                  ${activeSection === item.id
-                    ? theme === 'dark'
-                      ? 'bg-gray-800 text-blue-400'
-                      : 'bg-blue-50 text-blue-600 font-medium'
-                    : theme === 'dark'
+                  ${
+                    activeSection === item.id
+                      ? theme === 'dark'
+                        ? 'bg-gray-800 text-blue-400'
+                        : 'bg-blue-50 text-blue-600 font-medium'
+                      : theme === 'dark'
                       ? 'hover:bg-gray-800/50 text-gray-400'
                       : 'hover:bg-gray-50 text-gray-500'
                   }
@@ -171,21 +181,24 @@ export default function Sidebar({
                       scale: activeSection === item.id ? 1 : 0,
                       opacity: activeSection === item.id ? 0.2 : 0,
                     }}
-                    className={`absolute inset-0 -m-1 rounded-full ${theme === 'dark' ? 'bg-blue-500' : 'bg-blue-500'
-                      }`}
+                    className={`absolute inset-0 -m-1 rounded-full ${
+                      theme === 'dark' ? 'bg-blue-500' : 'bg-blue-500'
+                    }`}
                     style={{ width: '30px', height: '30px' }}
                   />
                   <div
-                    className={`relative z-10 ${activeSection === item.id
-                      ? theme === 'dark'
-                        ? 'text-blue-400'
-                        : 'text-blue-600'
-                      : theme === 'dark'
+                    className={`relative z-10 ${
+                      activeSection === item.id
+                        ? theme === 'dark'
+                          ? 'text-blue-400'
+                          : 'text-blue-600'
+                        : theme === 'dark'
                         ? 'text-gray-400'
                         : 'text-gray-500'
-                      } 
-                    group-hover:${theme === 'dark' ? 'text-blue-400' : 'text-blue-500'
-                      } transition-colors`}
+                    } 
+                    group-hover:${
+                      theme === 'dark' ? 'text-blue-400' : 'text-blue-500'
+                    } transition-colors`}
                   >
                     {item.icon}
                   </div>
@@ -208,14 +221,15 @@ export default function Sidebar({
                         <motion.div
                           initial={{ scale: 0.8 }}
                           animate={{ scale: 1 }}
-                          className={`${typeof item.badge === 'number'
-                            ? theme === 'dark'
-                              ? 'bg-blue-500/20 text-blue-400'
-                              : 'bg-blue-100 text-blue-600'
-                            : theme === 'dark'
+                          className={`${
+                            typeof item.badge === 'number'
+                              ? theme === 'dark'
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : 'bg-blue-100 text-blue-600'
+                              : theme === 'dark'
                               ? 'bg-purple-500/20 text-purple-400'
                               : 'bg-purple-100 text-purple-600'
-                            } text-xs px-2 py-0.5 rounded-full font-medium min-w-[20px] text-center`}
+                          } text-xs px-2 py-0.5 rounded-full font-medium min-w-[20px] text-center`}
                         >
                           {item.badge}
                         </motion.div>
@@ -228,8 +242,9 @@ export default function Sidebar({
                 {activeSection === item.id && isExpanded && (
                   <motion.div
                     layoutId='activeIndicator'
-                    className={`ml-auto w-1 h-8 ${theme === 'dark' ? 'bg-blue-400' : 'bg-blue-500'
-                      } rounded-full`}
+                    className={`ml-auto w-1 h-8 ${
+                      theme === 'dark' ? 'bg-blue-400' : 'bg-blue-500'
+                    } rounded-full`}
                   />
                 )}
               </motion.button>
@@ -240,18 +255,21 @@ export default function Sidebar({
 
       {/* Footer */}
       <div
-        className={`mt-auto p-4 ${isExpanded ? 'border-t' : ''} ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'
-          }`}
+        className={`mt-auto p-4 ${isExpanded ? 'border-t' : ''} ${
+          theme === 'dark' ? 'border-gray-700' : 'border-gray-100'
+        }`}
       >
         <motion.div
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           layout
-          className={`flex items-center ${isExpanded ? 'gap-3 px-4 py-3' : 'justify-center py-3'
-            } rounded-xl 
-            ${theme === 'dark'
-              ? 'bg-gray-800 hover:bg-gray-700'
-              : 'bg-gray-50 hover:bg-gray-100'
+          className={`flex items-center ${
+            isExpanded ? 'gap-3 px-4 py-3' : 'justify-center py-3'
+          } rounded-xl 
+            ${
+              theme === 'dark'
+                ? 'bg-gray-800 hover:bg-gray-700'
+                : 'bg-gray-50 hover:bg-gray-100'
             } 
             cursor-pointer transition-colors duration-200`}
         >
@@ -272,14 +290,16 @@ export default function Sidebar({
                 className='flex-grow'
               >
                 <p
-                  className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
-                    }`}
+                  className={`text-sm font-medium ${
+                    theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
+                  }`}
                 >
                   User Profile
                 </p>
                 <p
-                  className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                    }`}
+                  className={`text-xs ${
+                    theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                  }`}
                 >
                   Pro Account
                 </p>

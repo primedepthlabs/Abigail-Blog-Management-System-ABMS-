@@ -33,7 +33,7 @@
     "jsdom": "^26.1.0",
     "json2csv": "^6.0.0-alpha.2",
     "lucide-react": "^0.438.0",
-    "marked": "^15.0.11",
+    "marked": "^15.0.12",
     "next": "^15.3.2",
     "openai": "^4.98.0",
     "puppeteer": "^24.8.2",

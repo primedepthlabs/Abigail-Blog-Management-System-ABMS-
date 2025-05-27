@@ -12,10 +12,15 @@ import {
   Info,
   X,
   CheckCircle2,
+  CheckSquare,
+  Square,
+  Globe,
+  User,
+  Tag,
+  Image,
 } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
-//  
-// 
+
 interface RssManagerProps {
   theme: string;
   setTheme?: (theme: string) => void;
@@ -33,6 +38,21 @@ interface FeedItem {
   pubDate?: string;
   description?: string;
   content?: string;
+  creator?: string;
+  categories?: string[];
+  media?: {
+    thumbnail?: string;
+    content?: string;
+  };
+}
+
+interface FeedData {
+  title: string;
+  description: string;
+  link: string;
+  lastBuildDate: string;
+  language: string;
+  items: FeedItem[];
 }
 
 // Processing status types
@@ -43,6 +63,14 @@ interface ProcessingStatus {
   totalItems: number;
   processedItems: number;
   currentItemTitle: string;
+  results?: {
+    total: number;
+    processed: number;
+    humanized: number;
+    skipped: number;
+    shopifyPosts: number;
+    errors: number;
+  };
 }
 
 export default function RssManager({ theme }: RssManagerProps) {
@@ -50,6 +78,8 @@ export default function RssManager({ theme }: RssManagerProps) {
   const [feeds, setFeeds] = useState<FeedRecord[]>([]);
   const [selectedFeed, setSelectedFeed] = useState<string | null>(null);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
+  const [currentFeedData, setCurrentFeedData] = useState<FeedData | null>(null);
+  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [error, setError] = useState('');
   const [loadingFeeds, setLoadingFeeds] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -75,7 +105,6 @@ export default function RssManager({ theme }: RssManagerProps) {
   const loadFeeds = async () => {
     setLoadingFeeds(true);
     try {
-      // This endpoint should query the rss_feeds table
       const res = await supabase.from('rss_feeds').select('*');
       setFeeds(res.data);
     } catch (err) {
@@ -90,45 +119,123 @@ export default function RssManager({ theme }: RssManagerProps) {
     loadFeeds();
   }, []);
 
-  // Simulate processing progress - for demo purposes
+  // Fetch feed data (without processing)
+  const fetchFeedData = async (url: string): Promise<FeedData | null> => {
+    try {
+      const res = await fetch(`/api/rss?url=${encodeURIComponent(url)}`);
+      if (!res.ok) throw new Error('Failed to fetch feed');
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      console.error('Error fetching feed:', err);
+      throw err;
+    }
+  };
 
+  // Add feed - now fetches data first, then allows selection
   const addFeed = async () => {
     if (!feedUrl.trim()) return;
     try {
       setError('');
+      setLoadingItems(true);
+      
+      // First, fetch the feed data to show items
+      const feedData = await fetchFeedData(feedUrl.trim());
+      if (!feedData) {
+        throw new Error('Invalid feed data received');
+      }
 
-      // Start the processing UI simulation
+      // Display the feed data for selection
+      setCurrentFeedData(feedData);
+      setFeedItems(feedData.items || []);
+      setSelectedItems(new Set()); // Reset selections
+      setSelectedFeed(feedUrl.trim());
+      
+    } catch (err) {
+      console.error(err);
+      setError('Error fetching RSS feed. Please check the URL and try again.');
+    } finally {
+      setLoadingItems(false);
+    }
+  };
+
+  // Process selected items
+  const processSelectedItems = async () => {
+    if (!currentFeedData || selectedItems.size === 0) {
+      setError('Please select at least one item to process');
+      return;
+    }
+
+    // Use feedUrl or selectedFeed as fallback
+    const urlToProcess = feedUrl.trim() || selectedFeed;
+    if (!urlToProcess) {
+      setError('No feed URL available for processing');
+      return;
+    }
+
+    try {
+      setError('');
+      
+      // Create filtered feed data with only selected items
+      const selectedFeedData = {
+        ...currentFeedData,
+        items: currentFeedData.items.filter((_, index) => selectedItems.has(index))
+      };
+
+      // Start processing
       setProcessingStatus({
         isProcessing: true,
-        currentStep: 'Fetching RSS Feed URLS and Humanizing them with AI',
+        currentStep: 'Processing selected RSS items...',
         progress: 10,
-        totalItems: 0,
+        totalItems: selectedItems.size,
         processedItems: 0,
         currentItemTitle: '',
       });
 
-      // This endpoint should insert into the rss_feeds table
+      // Send to backend for processing
       const res = await fetch('/api/rss', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: feedUrl.trim() }),
+        body: JSON.stringify({ 
+          url: urlToProcess,
+          selectedItems: Array.from(selectedItems),
+          feedData: selectedFeedData
+        }),
       });
-      if (!res.ok) throw new Error('Failed to add feed');
-      setFeedUrl('');
-      loadFeeds();
+      
+      if (!res.ok) throw new Error('Failed to process selected items');
+      
+      const result = await res.json();
+      
+      // Update processing status with results
       setProcessingStatus({
         isProcessing: false,
-        currentStep: 'Fetching RSS Feed',
-        progress: 10,
-        totalItems: 0,
-        processedItems: 0,
+        currentStep: 'Completed',
+        progress: 100,
+        totalItems: result.total,
+        processedItems: result.processed,
         currentItemTitle: '',
+        results: {
+          total: result.total,
+          processed: result.processed,
+          humanized: result.humanized,
+          skipped: result.skipped,
+          shopifyPosts: result.shopifyPosts,
+          errors: result.errors,
+        }
       });
+
+      // Reset form and reload feeds
+      setFeedUrl('');
+      setCurrentFeedData(null);
+      setFeedItems([]);
+      setSelectedItems(new Set());
+      setSelectedFeed(null);
+      loadFeeds();
+      
     } catch (err) {
       console.error(err);
-      setError('Error adding feed URL');
-
-      // Reset processing status on error
+      setError('Error processing selected items');
       setProcessingStatus({
         isProcessing: false,
         currentStep: '',
@@ -143,21 +250,55 @@ export default function RssManager({ theme }: RssManagerProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      addFeed();
+      if (currentFeedData && selectedItems.size > 0) {
+        processSelectedItems();
+      } else {
+        addFeed();
+      }
     }
   };
 
+  // Toggle item selection
+  const toggleItemSelection = (index: number) => {
+    const newSelected = new Set(selectedItems);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+    } else {
+      newSelected.add(index);
+    }
+    setSelectedItems(newSelected);
+  };
+
+  // Select all items
+  const selectAll = () => {
+    if (feedItems.length > 0) {
+      const allIndices = feedItems.map((_, index) => index);
+      setSelectedItems(new Set(allIndices));
+    }
+  };
+
+  // Deselect all items
+  const deselectAll = () => {
+    setSelectedItems(new Set());
+  };
+
+  // Select existing feed
   const selectFeed = async (url: string) => {
     setSelectedFeed(url);
+    setFeedUrl(url); // Fix: Update feedUrl state as well
     setFeedItems([]);
+    setCurrentFeedData(null);
+    setSelectedItems(new Set());
     setLoadingItems(true);
     setError('');
     setShowDescription({});
+    
     try {
-      const res = await fetch(`/api/rss?url=${encodeURIComponent(url)}`);
-      if (!res.ok) throw new Error('Failed to fetch feed items');
-      const data = await res.json();
-      setFeedItems(Array.isArray(data.items) ? data.items : []);
+      const data = await fetchFeedData(url);
+      if (data) {
+        setCurrentFeedData(data);
+        setFeedItems(Array.isArray(data.items) ? data.items : []);
+      }
     } catch (err) {
       console.error(err);
       setError('Error fetching feed items');
@@ -184,17 +325,16 @@ export default function RssManager({ theme }: RssManagerProps) {
   };
 
   const formatDate = (dateString?: string) => {
-    if (!dateString) return '';
+    if (!dateString) return 'No date';
     try {
-      const date = new Date(dateString);
-      return new Intl.DateTimeFormat('en-US', {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
         month: 'short',
         day: 'numeric',
-        year: 'numeric',
         hour: '2-digit',
-        minute: '2-digit',
-      }).format(date);
-    } catch (e) {
+        minute: '2-digit'
+      });
+    } catch {
       return dateString;
     }
   };
@@ -204,17 +344,20 @@ export default function RssManager({ theme }: RssManagerProps) {
     return url.substring(0, maxLength - 3) + '...';
   };
 
+  const extractImageFromContent = (description?: string, content?: string) => {
+    const htmlContent = content || description || '';
+    const imgMatch = htmlContent.match(/<img[^>]+src="([^">]+)"/);
+    return imgMatch ? imgMatch[1] : null;
+  };
+
   const ProcessingProgressUI = () => {
     const {
       isProcessing,
       currentStep,
-      progress,
-      totalItems,
-      processedItems,
-      currentItemTitle,
+      results,
     } = processingStatus;
 
-    if (!isProcessing) return null;
+    if (!isProcessing && !results) return null;
 
     return (
       <div className='fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-6'>
@@ -224,62 +367,59 @@ export default function RssManager({ theme }: RssManagerProps) {
             Processing RSS Feed
           </h3>
 
-          <div className='mb-5'>
-            <div className='flex justify-between mb-2'>
-              <span className='text-blue-400 animate-pulse font-medium'>
-                {currentStep}
-              </span>
-            </div>
-          </div>
-
-          {totalItems > 0 && (
-            <div className='mb-4'>
-              <div className='text-gray-300 mb-2 text-sm flex justify-between'>
-                <span>Processing items</span>
-                <span>
-                  {processedItems} of {totalItems}
+          {isProcessing ? (
+            <div className='mb-5'>
+              <div className='flex justify-between mb-2'>
+                <span className='text-blue-400 animate-pulse font-medium'>
+                  {currentStep}
                 </span>
               </div>
-
-              <div className='bg-gray-800 rounded-lg p-3 border border-gray-700'>
-                {currentStep === 'Completed' ? (
-                  <div className='flex items-center text-green-400'>
-                    <CheckCircle2 className='h-5 w-5 mr-2' />
-                    <span>All items processed successfully</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className='flex items-center mb-2'>
-                      <Loader2 className='h-4 w-4 mr-2 text-blue-400 animate-spin' />
-                      <span className='text-gray-300 truncate'>
-                        {currentItemTitle || 'Processing...'}
-                      </span>
-                    </div>
-                    <div className='text-xs text-gray-500'>
-                      {currentStep === 'Extracting Blog Posts'
-                        ? 'Parsing and humanizing content'
-                        : currentStep === 'Saving to Database'
-                        ? 'Writing processed data to database'
-                        : 'Working...'}
-                    </div>
-                  </>
-                )}
+              <div className='flex items-center text-gray-400'>
+                <Loader2 className='h-4 w-4 mr-2 animate-spin' />
+                <span>Please wait while we process your selected items...</span>
               </div>
             </div>
-          )}
-
-          {currentStep === 'Completed' ? (
-            <div className='bg-green-900/30 border border-green-800 text-green-400 px-4 py-3 rounded-lg text-sm flex items-center'>
-              <CheckCircle2 className='h-5 w-5 mr-2' />
-              <span>
-                RSS feed successfully processed and added to your collection
-              </span>
+          ) : results ? (
+            <div className='space-y-4'>
+              <div className='bg-green-900/30 border border-green-800 text-green-400 px-4 py-3 rounded-lg text-sm flex items-center'>
+                <CheckCircle2 className='h-5 w-5 mr-2' />
+                <span>Processing completed successfully!</span>
+              </div>
+              
+              <div className='grid grid-cols-2 gap-4 text-sm'>
+                <div className='text-center p-3 bg-blue-900/20 rounded-lg'>
+                  <div className='text-2xl font-bold text-blue-400'>{results.total}</div>
+                  <div className='text-blue-300'>Total Items</div>
+                </div>
+                <div className='text-center p-3 bg-green-900/20 rounded-lg'>
+                  <div className='text-2xl font-bold text-green-400'>{results.humanized}</div>
+                  <div className='text-green-300'>Humanized</div>
+                </div>
+                <div className='text-center p-3 bg-purple-900/20 rounded-lg'>
+                  <div className='text-2xl font-bold text-purple-400'>{results.shopifyPosts}</div>
+                  <div className='text-purple-300'>Published</div>
+                </div>
+                <div className='text-center p-3 bg-gray-800/50 rounded-lg'>
+                  <div className='text-2xl font-bold text-gray-400'>{results.skipped}</div>
+                  <div className='text-gray-300'>Skipped</div>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => setProcessingStatus({
+                  isProcessing: false,
+                  currentStep: '',
+                  progress: 0,
+                  totalItems: 0,
+                  processedItems: 0,
+                  currentItemTitle: '',
+                })}
+                className='w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 px-4 transition-colors'
+              >
+                Close
+              </button>
             </div>
-          ) : (
-            <div className='text-gray-400 text-sm italic'>
-              Please wait while we extract and process the blog content...
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
     );
@@ -293,10 +433,10 @@ export default function RssManager({ theme }: RssManagerProps) {
       <div className='container mx-auto p-4'>
         <header className='mb-8'>
           <h1 className='text-3xl font-bold text-white mb-2'>
-            RSS Feed Reader
+            RSS Feed Manager
           </h1>
           <p className='text-gray-400'>
-            Stay updated with your favorite content
+            Fetch RSS feeds and select which items to humanize and publish
           </p>
         </header>
 
@@ -324,27 +464,52 @@ export default function RssManager({ theme }: RssManagerProps) {
                     <Search className='h-5 w-5 text-gray-500' />
                   </div>
                 </div>
-                <button
-                  onClick={addFeed}
-                  disabled={processingStatus.isProcessing || !feedUrl.trim()}
-                  className={`w-full bg-blue-600 text-white font-medium rounded-lg py-3 px-4 flex items-center justify-center transition-all duration-200 ${
-                    processingStatus.isProcessing || !feedUrl.trim()
-                      ? 'opacity-60 cursor-not-allowed'
-                      : 'hover:bg-blue-700'
-                  }`}
-                >
-                  {processingStatus.isProcessing ? (
-                    <>
-                      <Loader2 className='h-5 w-5 mr-2 animate-spin' />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className='h-5 w-5 mr-2' />
-                      Add Feed
-                    </>
-                  )}
-                </button>
+                
+                {/* Show different buttons based on state */}
+                {currentFeedData ? (
+                  <button
+                    onClick={processSelectedItems}
+                    disabled={processingStatus.isProcessing || selectedItems.size === 0}
+                    className={`w-full bg-green-600 text-white font-medium rounded-lg py-3 px-4 flex items-center justify-center transition-all duration-200 ${
+                      processingStatus.isProcessing || selectedItems.size === 0
+                        ? 'opacity-60 cursor-not-allowed'
+                        : 'hover:bg-green-700'
+                    }`}
+                  >
+                    {processingStatus.isProcessing ? (
+                      <>
+                        <Loader2 className='h-5 w-5 mr-2 animate-spin' />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        Process Selected ({selectedItems.size})
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={addFeed}
+                    disabled={loadingItems || !feedUrl.trim()}
+                    className={`w-full bg-blue-600 text-white font-medium rounded-lg py-3 px-4 flex items-center justify-center transition-all duration-200 ${
+                      loadingItems || !feedUrl.trim()
+                        ? 'opacity-60 cursor-not-allowed'
+                        : 'hover:bg-blue-700'
+                    }`}
+                  >
+                    {loadingItems ? (
+                      <>
+                        <Loader2 className='h-5 w-5 mr-2 animate-spin' />
+                        Fetching...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className='h-5 w-5 mr-2' />
+                        Fetch Feed
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
 
               {error && (
@@ -430,90 +595,152 @@ export default function RssManager({ theme }: RssManagerProps) {
 
           {/* Right column - Feed content */}
           <div className='lg:col-span-3'>
-            {selectedFeed ? (
-              <div className='bg-gray-900 rounded-xl p-5 shadow-lg min-h-[400px]'>
-                <div className='mb-6 border-b border-gray-800 pb-4'>
-                  <h2 className='text-xl font-semibold mb-2 flex items-center truncate'>
-                    <Rss className='mr-2 h-5 w-5 text-blue-400 flex-shrink-0' />
-                    <span className='truncate'>{selectedFeed}</span>
-                  </h2>
-                  <div className='text-sm text-gray-400 flex items-center'>
-                    <span>{feedItems.length} articles</span>
-                    {loadingItems && (
-                      <div className='ml-3 flex items-center text-blue-400'>
-                        <Loader2 className='h-3 w-3 mr-1 animate-spin' />
-                        Loading...
-                      </div>
+            {selectedFeed && currentFeedData ? (
+              <div className='bg-gray-900 rounded-xl p-5 shadow-lg'>
+                {/* Feed Info */}
+                <div className='bg-blue-50/10 p-4 rounded-lg mb-6'>
+                  <h2 className='text-xl font-semibold text-blue-100 mb-2'>{currentFeedData.title}</h2>
+                  <p className='text-blue-200/80 mb-2'>{currentFeedData.description}</p>
+                  <div className='flex items-center gap-4 text-sm text-blue-300/80'>
+                    <span className='flex items-center gap-1'>
+                      <Globe className='w-4 h-4' />
+                      {currentFeedData.link}
+                    </span>
+                    {currentFeedData.lastBuildDate && (
+                      <span className='flex items-center gap-1'>
+                        <Calendar className='w-4 h-4' />
+                        {formatDate(currentFeedData.lastBuildDate)}
+                      </span>
                     )}
                   </div>
                 </div>
 
+                {/* Selection Controls */}
+                <div className='flex items-center justify-between bg-gray-800/50 p-4 rounded-lg mb-6'>
+                  <div className='flex items-center gap-4'>
+                    <span className='font-medium text-gray-300'>
+                      {selectedItems.size} of {feedItems.length} items selected
+                    </span>
+                    <div className='flex gap-2'>
+                      <button
+                        onClick={selectAll}
+                        className='px-3 py-1 text-sm bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors'
+                      >
+                        Select All
+                      </button>
+                      <button
+                        onClick={deselectAll}
+                        className='px-3 py-1 text-sm bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors'
+                      >
+                        Deselect All
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Feed Items */}
                 {loadingItems ? (
-                  <div className='space-y-6'>
+                  <div className='space-y-4'>
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className='animate-pulse'>
-                        <div className='h-7 bg-gray-800/70 rounded w-3/4 mb-3'></div>
-                        <div className='h-4 bg-gray-800/50 rounded w-1/4 mb-4'></div>
-                        <div className='space-y-2'>
-                          <div className='h-4 bg-gray-800/30 rounded'></div>
-                          <div className='h-4 bg-gray-800/30 rounded w-5/6'></div>
-                        </div>
+                      <div key={i} className='animate-pulse border border-gray-700 rounded-lg p-4'>
+                        <div className='h-6 bg-gray-800/70 rounded w-3/4 mb-3'></div>
+                        <div className='h-4 bg-gray-800/50 rounded w-1/4 mb-2'></div>
+                        <div className='h-4 bg-gray-800/30 rounded'></div>
                       </div>
                     ))}
                   </div>
                 ) : feedItems.length > 0 ? (
-                  <div className='space-y-8'>
-                    {feedItems.map((item, idx) => (
-                      <div key={idx} className='group'>
-                        <article className='p-5 rounded-xl bg-gray-800/40 border border-gray-700/50 hover:border-gray-700 transition-all duration-200'>
-                          <header className='mb-3'>
-                            <a
-                              href={item.link}
-                              target='_blank'
-                              rel='noopener noreferrer'
-                              className='group-hover:text-blue-400 font-medium text-lg inline-flex items-start transition-colors duration-200'
-                            >
-                              {item.title}
-                              <ExternalLink className='h-4 w-4 ml-2 mt-1 opacity-70' />
-                            </a>
-
-                            {item.pubDate && (
-                              <div className='flex items-center text-sm text-gray-500 mt-2'>
-                                <Calendar className='h-3 w-3 mr-1' />
-                                {formatDate(item.pubDate)}
-                              </div>
-                            )}
-                          </header>
-
-                          {(item.description || item.content) && (
-                            <div className='mt-3'>
-                              <button
-                                onClick={() => toggleDescription(idx)}
-                                className='text-sm text-blue-400 hover:text-blue-300 transition-colors mb-2 flex items-center'
-                              >
-                                {showDescription[idx]
-                                  ? 'Hide description'
-                                  : 'Show description'}
-                              </button>
-
-                              {showDescription[idx] && (
-                                <div
-                                  className='mt-2 text-gray-300 text-sm prose prose-invert max-w-none prose-sm overflow-hidden rounded-lg custom-scrollbar'
-                                  style={{
-                                    maxHeight: '400px',
-                                    overflowY: 'auto',
-                                  }}
-                                  dangerouslySetInnerHTML={{
-                                    __html:
-                                      item.description || item.content || '',
-                                  }}
-                                />
+                  <div className='space-y-4'>
+                    {feedItems.map((item, index) => {
+                      const isSelected = selectedItems.has(index);
+                      const thumbnail = extractImageFromContent(item.description, item.content) || item.media?.thumbnail;
+                      
+                      return (
+                        <div
+                          key={index}
+                          className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                            isSelected 
+                              ? 'border-blue-500 bg-blue-950/20' 
+                              : 'border-gray-700 hover:border-gray-600'
+                          }`}
+                          onClick={() => toggleItemSelection(index)}
+                        >
+                          <div className='flex items-start gap-4'>
+                            {/* Checkbox */}
+                            <div className='flex-shrink-0 mt-1'>
+                              {isSelected ? (
+                                <CheckSquare className='w-5 h-5 text-blue-500' />
+                              ) : (
+                                <Square className='w-5 h-5 text-gray-400' />
                               )}
                             </div>
-                          )}
-                        </article>
-                      </div>
-                    ))}
+
+                            {/* Thumbnail */}
+                            {thumbnail && (
+                              <div className='flex-shrink-0'>
+                                <img
+                                  src={thumbnail}
+                                  alt=""
+                                  className='w-16 h-16 object-cover rounded'
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              </div>
+                            )}
+
+                            {/* Content */}
+                            <div className='flex-1 min-w-0'>
+                              <h4 className='font-medium text-gray-100 mb-2 line-clamp-2'>
+                                {item.title || 'Untitled'}
+                              </h4>
+                              
+                              <div className='text-sm text-gray-400 mb-3 line-clamp-3'>
+                                {item.description?.replace(/<[^>]*>/g, '').substring(0, 200)}...
+                              </div>
+
+                              <div className='flex items-center gap-4 text-xs text-gray-500'>
+                                {item.pubDate && (
+                                  <span className='flex items-center gap-1'>
+                                    <Calendar className='w-3 h-3' />
+                                    {formatDate(item.pubDate)}
+                                  </span>
+                                )}
+                                
+                                {item.creator && (
+                                  <span className='flex items-center gap-1'>
+                                    <User className='w-3 h-3' />
+                                    {item.creator}
+                                  </span>
+                                )}
+
+                                {item.categories && item.categories.length > 0 && (
+                                  <span className='flex items-center gap-1'>
+                                    <Tag className='w-3 h-3' />
+                                    {item.categories.slice(0, 3).join(', ')}
+                                  </span>
+                                )}
+
+                                {item.link && (
+                                  <span className='flex items-center gap-1'>
+                                    <Globe className='w-3 h-3' />
+                                    <a 
+                                      href={item.link} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className='text-blue-400 hover:underline'
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      View Original
+                                    </a>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className='text-center py-16'>
@@ -529,6 +756,32 @@ export default function RssManager({ theme }: RssManagerProps) {
                   </div>
                 )}
               </div>
+            ) : selectedFeed && !currentFeedData ? (
+              <div className='bg-gray-900 rounded-xl p-5 shadow-lg'>
+                {loadingItems ? (
+                  <div className='text-center py-16'>
+                    <Loader2 className='h-8 w-8 mx-auto mb-4 animate-spin text-blue-400' />
+                    <h3 className='text-xl font-medium text-gray-400 mb-2'>
+                      Loading feed...
+                    </h3>
+                    <p className='text-gray-500'>
+                      Please wait while we fetch the RSS feed
+                    </p>
+                  </div>
+                ) : (
+                  <div className='text-center py-16'>
+                    <div className='mx-auto w-16 h-16 mb-4 rounded-full bg-gray-800/50 flex items-center justify-center'>
+                      <Rss className='h-8 w-8 text-gray-600' />
+                    </div>
+                    <h3 className='text-xl font-medium text-gray-400 mb-2'>
+                      Failed to load feed
+                    </h3>
+                    <p className='text-gray-500'>
+                      Please try again or check the feed URL
+                    </p>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className='bg-gray-900 rounded-xl p-8 shadow-lg text-center py-20'>
                 <div className='mx-auto w-20 h-20 mb-6 rounded-full bg-gray-800/50 flex items-center justify-center'>
@@ -538,27 +791,8 @@ export default function RssManager({ theme }: RssManagerProps) {
                   No feed selected
                 </h2>
                 <p className='text-gray-500 max-w-md mx-auto mb-6'>
-                  Select a feed from the sidebar or add a new RSS feed to get
-                  started
+                  Enter an RSS feed URL above to get started, or select an existing feed from the sidebar
                 </p>
-                {feeds.length > 0 && (
-                  <div className='max-w-xs mx-auto'>
-                    <div className='text-sm text-left mb-2 text-gray-400'>
-                      Quick select:
-                    </div>
-                    <div className='bg-gray-800 rounded-lg p-1'>
-                      {feeds.slice(0, 3).map((feed, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => selectFeed(feed.feed_url)}
-                          className='block w-full text-left px-4 py-2 rounded-md hover:bg-gray-700 text-gray-300 text-sm truncate transition-colors'
-                        >
-                          {truncateUrl(feed.feed_url, 35)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -591,46 +825,6 @@ export default function RssManager({ theme }: RssManagerProps) {
                   {selectedFeedDetails.url}
                 </p>
               </div>
-
-              <div>
-                <h4 className='text-gray-400 text-sm mb-3'>
-                  Feed Content URLs
-                </h4>
-                <div className='bg-gray-800 rounded-lg p-4 space-y-3'>
-                  {loadingItems ? (
-                    <div className='flex items-center text-blue-400'>
-                      <Loader2 className='h-4 w-4 mr-2 animate-spin' />
-                      Loading feed URLs...
-                    </div>
-                  ) : feedItems.length > 0 ? (
-                    <ul className='space-y-2'>
-                      {feedItems.map((item, idx) => (
-                        <li
-                          key={idx}
-                          className='border-b border-gray-700 pb-2 last:border-0 last:pb-0'
-                        >
-                          <a
-                            href={item.link}
-                            target='_blank'
-                            rel='noopener noreferrer'
-                            className='text-blue-400 hover:text-blue-300 text-sm flex items-start'
-                          >
-                            <span className='mr-1'>{idx + 1}.</span>
-                            <span className='flex-1'>
-                              {item.title || item.link}
-                            </span>
-                            <ExternalLink className='h-3 w-3 ml-2 mt-1 flex-shrink-0' />
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className='text-gray-500 text-sm'>
-                      No URLs found in this feed or feed not loaded.
-                    </p>
-                  )}
-                </div>
-              </div>
             </div>
 
             <div className='p-4 border-t border-gray-800 flex justify-end'>
@@ -662,6 +856,20 @@ export default function RssManager({ theme }: RssManagerProps) {
 
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: rgba(75, 85, 99, 1);
+        }
+
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .line-clamp-3 {
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
         }
       `}</style>
     </div>
