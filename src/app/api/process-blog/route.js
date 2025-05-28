@@ -685,7 +685,7 @@ async function processSingleBlog(blogUrl) {
 
     // 5. Use OpenAI to enhance content with better image distribution
     const prompt = `
-You are a professional blog content creator. Create a comprehensive, engaging blog post based on this information:
+You are a professional blog content creator. Create a comprehensive, engaging formatted blog post based on this information:
 
 Blog URL: ${blogUrl}
 Title: ${blogData.title}
@@ -713,7 +713,8 @@ CRITICAL IMAGE PLACEMENT INSTRUCTIONS:
 - Use images to break up long text sections and enhance readability
 - Match images to the content they best illustrate (e.g., if discussing a product, place the product image there)
 - Distribute images evenly throughout the post for better visual flow
--Do not include original source url at the end
+
+
 `
     : ''
 }
@@ -761,8 +762,9 @@ IMPORTANT:
 - Place images where they make the most sense contextually within the content flow
 - DO NOT create an "Additional Images" section at the end
 - Images should enhance and complement the text they appear near
+-Create the Blog text properly formatted in blog style
 
-Return ONLY the complete markdown blog content with images properly distributed throughout, ready to display as-is.`;
+Return ONLY the complete markdown blog content with images with proper blog format, properly distributed throughout, ready to display as-is.  `;
 
     let enhancedBlogMarkdown = '';
     try {
@@ -788,7 +790,6 @@ Return ONLY the complete markdown blog content with images properly distributed 
       );
 
       enhancedBlogMarkdown += contentWithImages;
-      enhancedBlogMarkdown += `\n\n---\n*Original source: [${blogData.source_domain}](${blogUrl})*`;
     }
 
     // 6. Humanize with StealthGPT
