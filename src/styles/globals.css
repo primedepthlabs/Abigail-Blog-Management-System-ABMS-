@@ -28,6 +28,13 @@
   /* #endregion  /**======== Primary Color =========== */
 }
 
+input#blogUrl {
+  color: gray !important;
+}
+input#blogUrl:disabled {
+  color: black !important;
+  opacity: 1;
+}
 @layer base {
   /* inter var - latin */
   @font-face {
