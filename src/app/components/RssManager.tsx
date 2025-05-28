@@ -69,6 +69,10 @@ interface ProcessingStatus {
     humanized: number;
     skipped: number;
     shopifyPosts: number;
+    shopifyErrors: number;
+    wordpressPosts: number;
+    wordpressErrors: number;
+    dualSuccess: number;
     errors: number;
   };
 }
@@ -138,7 +142,7 @@ export default function RssManager({ theme }: RssManagerProps) {
     try {
       setError('');
       setLoadingItems(true);
-      
+
       // First, fetch the feed data to show items
       const feedData = await fetchFeedData(feedUrl.trim());
       if (!feedData) {
@@ -150,7 +154,6 @@ export default function RssManager({ theme }: RssManagerProps) {
       setFeedItems(feedData.items || []);
       setSelectedItems(new Set()); // Reset selections
       setSelectedFeed(feedUrl.trim());
-      
     } catch (err) {
       console.error(err);
       setError('Error fetching RSS feed. Please check the URL and try again.');
@@ -175,11 +178,13 @@ export default function RssManager({ theme }: RssManagerProps) {
 
     try {
       setError('');
-      
+
       // Create filtered feed data with only selected items
       const selectedFeedData = {
         ...currentFeedData,
-        items: currentFeedData.items.filter((_, index) => selectedItems.has(index))
+        items: currentFeedData.items.filter((_, index) =>
+          selectedItems.has(index),
+        ),
       };
 
       // Start processing
@@ -196,17 +201,17 @@ export default function RssManager({ theme }: RssManagerProps) {
       const res = await fetch('/api/rss', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           url: urlToProcess,
           selectedItems: Array.from(selectedItems),
-          feedData: selectedFeedData
+          feedData: selectedFeedData,
         }),
       });
-      
+
       if (!res.ok) throw new Error('Failed to process selected items');
-      
+
       const result = await res.json();
-      
+
       // Update processing status with results
       setProcessingStatus({
         isProcessing: false,
@@ -221,8 +226,12 @@ export default function RssManager({ theme }: RssManagerProps) {
           humanized: result.humanized,
           skipped: result.skipped,
           shopifyPosts: result.shopifyPosts,
+          shopifyErrors: result.shopifyErrors,
+          wordpressPosts: result.wordpressPosts || 0,
+          wordpressErrors: result.wordpressErrors || 0,
+          dualSuccess: result.dualSuccess || 0,
           errors: result.errors,
-        }
+        },
       });
 
       // Reset form and reload feeds
@@ -232,7 +241,6 @@ export default function RssManager({ theme }: RssManagerProps) {
       setSelectedItems(new Set());
       setSelectedFeed(null);
       loadFeeds();
-      
     } catch (err) {
       console.error(err);
       setError('Error processing selected items');
@@ -292,7 +300,7 @@ export default function RssManager({ theme }: RssManagerProps) {
     setLoadingItems(true);
     setError('');
     setShowDescription({});
-    
+
     try {
       const data = await fetchFeedData(url);
       if (data) {
@@ -332,7 +340,7 @@ export default function RssManager({ theme }: RssManagerProps) {
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
       });
     } catch {
       return dateString;
@@ -351,11 +359,7 @@ export default function RssManager({ theme }: RssManagerProps) {
   };
 
   const ProcessingProgressUI = () => {
-    const {
-      isProcessing,
-      currentStep,
-      results,
-    } = processingStatus;
+    const { isProcessing, currentStep, results } = processingStatus;
 
     if (!isProcessing && !results) return null;
 
@@ -383,37 +387,82 @@ export default function RssManager({ theme }: RssManagerProps) {
             <div className='space-y-4'>
               <div className='bg-green-900/30 border border-green-800 text-green-400 px-4 py-3 rounded-lg text-sm flex items-center'>
                 <CheckCircle2 className='h-5 w-5 mr-2' />
-                <span>Processing completed successfully!</span>
+                <div>
+                  <div className='font-medium'>
+                    Processing completed successfully!
+                  </div>
+                  <div className='text-xs text-green-300 mt-1'>
+                    Content published to Shopify and WordPress
+                  </div>
+                </div>
               </div>
-              
-              <div className='grid grid-cols-2 gap-4 text-sm'>
+
+              <div className='grid grid-cols-2 md:grid-cols-3 gap-3 text-sm'>
                 <div className='text-center p-3 bg-blue-900/20 rounded-lg'>
-                  <div className='text-2xl font-bold text-blue-400'>{results.total}</div>
-                  <div className='text-blue-300'>Total Items</div>
+                  <div className='text-xl font-bold text-blue-400'>
+                    {results.total}
+                  </div>
+                  <div className='text-blue-300 text-xs'>Total Items</div>
                 </div>
                 <div className='text-center p-3 bg-green-900/20 rounded-lg'>
-                  <div className='text-2xl font-bold text-green-400'>{results.humanized}</div>
-                  <div className='text-green-300'>Humanized</div>
-                </div>
-                <div className='text-center p-3 bg-purple-900/20 rounded-lg'>
-                  <div className='text-2xl font-bold text-purple-400'>{results.shopifyPosts}</div>
-                  <div className='text-purple-300'>Published</div>
+                  <div className='text-xl font-bold text-green-400'>
+                    {results.humanized}
+                  </div>
+                  <div className='text-green-300 text-xs'>Humanized</div>
                 </div>
                 <div className='text-center p-3 bg-gray-800/50 rounded-lg'>
-                  <div className='text-2xl font-bold text-gray-400'>{results.skipped}</div>
-                  <div className='text-gray-300'>Skipped</div>
+                  <div className='text-xl font-bold text-gray-400'>
+                    {results.skipped}
+                  </div>
+                  <div className='text-gray-300 text-xs'>Skipped</div>
+                </div>
+                <div className='text-center p-3 bg-purple-900/20 rounded-lg'>
+                  <div className='text-xl font-bold text-purple-400'>
+                    {results.shopifyPosts || 0}
+                  </div>
+                  <div className='text-purple-300 text-xs'>Shopify Posts</div>
+                </div>
+                <div className='text-center p-3 bg-orange-900/20 rounded-lg'>
+                  <div className='text-xl font-bold text-orange-400'>
+                    {results.wordpressPosts || 0}
+                  </div>
+                  <div className='text-orange-300 text-xs'>WordPress Posts</div>
+                </div>
+                <div className='text-center p-3 bg-cyan-900/20 rounded-lg'>
+                  <div className='text-xl font-bold text-cyan-400'>
+                    {results.dualSuccess || 0}
+                  </div>
+                  <div className='text-cyan-300 text-xs'>Both Platforms</div>
                 </div>
               </div>
-              
+
+              {(results.shopifyErrors > 0 || results.wordpressErrors > 0) && (
+                <div className='mt-4 p-3 bg-red-900/20 border border-red-800 rounded-lg text-sm'>
+                  <div className='text-red-400 font-medium mb-2'>
+                    Publishing Errors:
+                  </div>
+                  <div className='flex gap-4 text-xs text-red-300'>
+                    {results.shopifyErrors > 0 && (
+                      <span>Shopify: {results.shopifyErrors} failed</span>
+                    )}
+                    {results.wordpressErrors > 0 && (
+                      <span>WordPress: {results.wordpressErrors} failed</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <button
-                onClick={() => setProcessingStatus({
-                  isProcessing: false,
-                  currentStep: '',
-                  progress: 0,
-                  totalItems: 0,
-                  processedItems: 0,
-                  currentItemTitle: '',
-                })}
+                onClick={() =>
+                  setProcessingStatus({
+                    isProcessing: false,
+                    currentStep: '',
+                    progress: 0,
+                    totalItems: 0,
+                    processedItems: 0,
+                    currentItemTitle: '',
+                  })
+                }
                 className='w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 px-4 transition-colors'
               >
                 Close
@@ -464,12 +513,14 @@ export default function RssManager({ theme }: RssManagerProps) {
                     <Search className='h-5 w-5 text-gray-500' />
                   </div>
                 </div>
-                
+
                 {/* Show different buttons based on state */}
                 {currentFeedData ? (
                   <button
                     onClick={processSelectedItems}
-                    disabled={processingStatus.isProcessing || selectedItems.size === 0}
+                    disabled={
+                      processingStatus.isProcessing || selectedItems.size === 0
+                    }
                     className={`w-full bg-green-600 text-white font-medium rounded-lg py-3 px-4 flex items-center justify-center transition-all duration-200 ${
                       processingStatus.isProcessing || selectedItems.size === 0
                         ? 'opacity-60 cursor-not-allowed'
@@ -482,9 +533,7 @@ export default function RssManager({ theme }: RssManagerProps) {
                         Processing...
                       </>
                     ) : (
-                      <>
-                        Process Selected ({selectedItems.size})
-                      </>
+                      <>Process Selected ({selectedItems.size})</>
                     )}
                   </button>
                 ) : (
@@ -599,8 +648,12 @@ export default function RssManager({ theme }: RssManagerProps) {
               <div className='bg-gray-900 rounded-xl p-5 shadow-lg'>
                 {/* Feed Info */}
                 <div className='bg-blue-50/10 p-4 rounded-lg mb-6'>
-                  <h2 className='text-xl font-semibold text-blue-100 mb-2'>{currentFeedData.title}</h2>
-                  <p className='text-blue-200/80 mb-2'>{currentFeedData.description}</p>
+                  <h2 className='text-xl font-semibold text-blue-100 mb-2'>
+                    {currentFeedData.title}
+                  </h2>
+                  <p className='text-blue-200/80 mb-2'>
+                    {currentFeedData.description}
+                  </p>
                   <div className='flex items-center gap-4 text-sm text-blue-300/80'>
                     <span className='flex items-center gap-1'>
                       <Globe className='w-4 h-4' />
@@ -642,7 +695,10 @@ export default function RssManager({ theme }: RssManagerProps) {
                 {loadingItems ? (
                   <div className='space-y-4'>
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className='animate-pulse border border-gray-700 rounded-lg p-4'>
+                      <div
+                        key={i}
+                        className='animate-pulse border border-gray-700 rounded-lg p-4'
+                      >
                         <div className='h-6 bg-gray-800/70 rounded w-3/4 mb-3'></div>
                         <div className='h-4 bg-gray-800/50 rounded w-1/4 mb-2'></div>
                         <div className='h-4 bg-gray-800/30 rounded'></div>
@@ -653,14 +709,18 @@ export default function RssManager({ theme }: RssManagerProps) {
                   <div className='space-y-4'>
                     {feedItems.map((item, index) => {
                       const isSelected = selectedItems.has(index);
-                      const thumbnail = extractImageFromContent(item.description, item.content) || item.media?.thumbnail;
-                      
+                      const thumbnail =
+                        extractImageFromContent(
+                          item.description,
+                          item.content,
+                        ) || item.media?.thumbnail;
+
                       return (
                         <div
                           key={index}
                           className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                            isSelected 
-                              ? 'border-blue-500 bg-blue-950/20' 
+                            isSelected
+                              ? 'border-blue-500 bg-blue-950/20'
                               : 'border-gray-700 hover:border-gray-600'
                           }`}
                           onClick={() => toggleItemSelection(index)}
@@ -680,7 +740,7 @@ export default function RssManager({ theme }: RssManagerProps) {
                               <div className='flex-shrink-0'>
                                 <img
                                   src={thumbnail}
-                                  alt=""
+                                  alt=''
                                   className='w-16 h-16 object-cover rounded'
                                   onError={(e) => {
                                     e.currentTarget.style.display = 'none';
@@ -694,9 +754,12 @@ export default function RssManager({ theme }: RssManagerProps) {
                               <h4 className='font-medium text-gray-100 mb-2 line-clamp-2'>
                                 {item.title || 'Untitled'}
                               </h4>
-                              
+
                               <div className='text-sm text-gray-400 mb-3 line-clamp-3'>
-                                {item.description?.replace(/<[^>]*>/g, '').substring(0, 200)}...
+                                {item.description
+                                  ?.replace(/<[^>]*>/g, '')
+                                  .substring(0, 200)}
+                                ...
                               </div>
 
                               <div className='flex items-center gap-4 text-xs text-gray-500'>
@@ -706,7 +769,7 @@ export default function RssManager({ theme }: RssManagerProps) {
                                     {formatDate(item.pubDate)}
                                   </span>
                                 )}
-                                
+
                                 {item.creator && (
                                   <span className='flex items-center gap-1'>
                                     <User className='w-3 h-3' />
@@ -714,20 +777,21 @@ export default function RssManager({ theme }: RssManagerProps) {
                                   </span>
                                 )}
 
-                                {item.categories && item.categories.length > 0 && (
-                                  <span className='flex items-center gap-1'>
-                                    <Tag className='w-3 h-3' />
-                                    {item.categories.slice(0, 3).join(', ')}
-                                  </span>
-                                )}
+                                {item.categories &&
+                                  item.categories.length > 0 && (
+                                    <span className='flex items-center gap-1'>
+                                      <Tag className='w-3 h-3' />
+                                      {item.categories.slice(0, 3).join(', ')}
+                                    </span>
+                                  )}
 
                                 {item.link && (
                                   <span className='flex items-center gap-1'>
                                     <Globe className='w-3 h-3' />
-                                    <a 
-                                      href={item.link} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer"
+                                    <a
+                                      href={item.link}
+                                      target='_blank'
+                                      rel='noopener noreferrer'
                                       className='text-blue-400 hover:underline'
                                       onClick={(e) => e.stopPropagation()}
                                     >
@@ -791,7 +855,8 @@ export default function RssManager({ theme }: RssManagerProps) {
                   No feed selected
                 </h2>
                 <p className='text-gray-500 max-w-md mx-auto mb-6'>
-                  Enter an RSS feed URL above to get started, or select an existing feed from the sidebar
+                  Enter an RSS feed URL above to get started, or select an
+                  existing feed from the sidebar
                 </p>
               </div>
             )}

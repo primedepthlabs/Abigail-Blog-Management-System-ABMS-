@@ -9,6 +9,7 @@ import AccountCircleRoundedIcon from '@mui/icons-material/AccountCircleRounded';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import RssFeedIcon from '@mui/icons-material/RssFeed';
 import { useState } from 'react';
+import NewsIcon from '@mui/icons-material/Article'; // Assuming you have a News icon
 
 // Updated interface to include theme props
 interface SidebarProps {
@@ -34,6 +35,12 @@ export default function Sidebar({
       label: 'Humanizer',
       icon: <SmartToyRoundedIcon />,
       badge: 'New',
+    },
+    {
+      id: 'anyblog',
+      label: 'Blog Humanizer',
+      icon: <NewsIcon />,
+      badge: null,
     },
     {
       id: 'rss',

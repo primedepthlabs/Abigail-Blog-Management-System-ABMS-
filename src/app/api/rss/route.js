@@ -11,7 +11,31 @@ const openai = new OpenAI({
 const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
 const SHOPIFY_SHOP_DOMAIN = process.env.SHOPIFY_SHOP_DOMAIN;
 
+// WORDPRESS CONFIGURATION
+const WP_URL = process.env.Administrative_URL;
+const WP_USER = process.env.Admin_Username;
+const WP_PASS = process.env.Admin_Password;
+const WP_AUTH = Buffer.from(`${WP_USER}:${WP_PASS}`).toString('base64');
+
 const feedList = [];
+
+const logger = {
+  info: (message, data) => {
+    console.log(`[INFO] ${new Date().toISOString()} - ${message}`, data || '');
+  },
+  error: (message, error) => {
+    console.error(
+      `[ERROR] ${new Date().toISOString()} - ${message}`,
+      error || '',
+    );
+  },
+  success: (message, data) => {
+    console.log(
+      `[SUCCESS] ${new Date().toISOString()} - ${message}`,
+      data || '',
+    );
+  },
+};
 
 // Function to convert markdown to HTML
 function markdownToHtml(markdown) {
@@ -41,6 +65,7 @@ function extractTitle(markdown) {
   return 'Blog Post';
 }
 
+// SHOPIFY FUNCTIONS
 async function getBlogId() {
   try {
     const response = await fetch(
@@ -59,19 +84,18 @@ async function getBlogId() {
 
     const data = await response.json();
     if (data.blogs && data.blogs.length > 0) {
-      console.log(
-        `📝 Using blog: ${data.blogs[0].title} (ID: ${data.blogs[0].id})`,
+      logger.info(
+        `Using Shopify blog: ${data.blogs[0].title} (ID: ${data.blogs[0].id})`,
       );
       return data.blogs[0].id;
     }
     throw new Error('No blogs found');
   } catch (error) {
-    console.error('❌ Error getting blog ID:', error);
+    logger.error('Error getting blog ID:', error);
     throw error;
   }
 }
 
-// Main function to create blog post in Shopify
 async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
   try {
     const blogId = await getBlogId();
@@ -102,7 +126,7 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
         body_html: htmlContent,
         summary: excerpt,
         tags: tags,
-        published: true,
+        published: false,
         author: blogData.author || 'RSS Bot',
         created_at: blogData.pubDate
           ? new Date(blogData.pubDate).toISOString()
@@ -118,9 +142,7 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
       };
     }
 
-    console.log(`📝 Creating Shopify blog post: "${title}"`);
-    console.log('📏 HTML content length:', htmlContent.length);
-    console.log('📝 HTML content preview:', htmlContent.slice(0, 1000));
+    logger.info(`Creating Shopify blog post: "${title}"`);
 
     const response = await fetch(
       `https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-10/blogs/${blogId}/articles.json`,
@@ -142,7 +164,7 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
     }
 
     const result = await response.json();
-    console.log(`✅ Created Shopify blog post: ${result.article.id}`);
+    logger.success(`Created Shopify blog post: ${result.article.id}`);
 
     return {
       success: true,
@@ -155,7 +177,7 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
       )}/blogs/${result.article.blog_id}/${result.article.handle}`,
     };
   } catch (error) {
-    console.error('❌ Failed to create Shopify blog post:', error);
+    logger.error('Failed to create Shopify blog post:', error);
     return {
       success: false,
       error: error.message,
@@ -163,7 +185,96 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
   }
 }
 
-// Test your Shopify connection
+// WORDPRESS FUNCTIONS
+async function createWordPressBlogPost(humanizedMarkdown, blogData = {}) {
+  try {
+    const title = extractTitle(humanizedMarkdown);
+    const htmlContent = markdownToHtml(humanizedMarkdown);
+
+    logger.info(`Creating WordPress blog post: "${title}"`);
+
+    // Create excerpt from markdown
+    const plainText = humanizedMarkdown
+      .replace(/^#.*$/gm, '')
+      .replace(/!\[.*?\]\(.*?\)/g, '')
+      .replace(/\[.*?\]\(.*?\)/g, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .trim();
+
+    const excerpt =
+      plainText.length > 200 ? plainText.substring(0, 200) + '...' : plainText;
+
+    const wpPayload = {
+      title: title,
+      content: htmlContent,
+      status: 'publish',
+      excerpt: excerpt,
+      author: 1, // Default author ID
+      categories: [1], // Default category ID
+      // Remove the tags line entirely, or use an empty array
+      tags: [], // Empty array or remove this line completely
+      meta: {
+        _wp_original_source: blogData.url || '',
+        _wp_original_author: blogData.author || '',
+        _wp_publication_date: blogData.pubDate || new Date().toISOString(),
+        _wp_rss_source: 'Auto-Generated from RSS Feed',
+      },
+    };
+
+    logger.info('WordPress payload created', {
+      title: wpPayload.title,
+      contentLength: wpPayload.content?.length || 0,
+      status: wpPayload.status,
+      originalSource: blogData.url,
+    });
+
+    const wpRes = await fetch(WP_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${WP_AUTH}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(wpPayload),
+    });
+
+    const wpData = await wpRes.json();
+
+    if (!wpRes.ok) {
+      logger.error('WordPress API error:', {
+        status: wpRes.status,
+        statusText: wpRes.statusText,
+        response: wpData,
+      });
+
+      return {
+        success: false,
+        error: wpData.message || `WordPress API error: ${wpRes.status}`,
+      };
+    }
+
+    logger.success(`Successfully published to WordPress`, {
+      wp_post_id: wpData.id,
+      wp_url: wpData.link || 'N/A',
+    });
+
+    return {
+      success: true,
+      postId: wpData.id,
+      title: wpData.title?.rendered || title,
+      url: wpData.link,
+      slug: wpData.slug,
+    };
+  } catch (error) {
+    logger.error('Failed to create WordPress blog post:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+// Test connections
 export async function testShopify() {
   try {
     const response = await fetch(
@@ -181,10 +292,32 @@ export async function testShopify() {
     }
 
     const data = await response.json();
-    console.log(`✅ Connected to: ${data.shop.name}`);
+    logger.success(`Connected to Shopify: ${data.shop.name}`);
     return { success: true, shopName: data.shop.name };
   } catch (error) {
-    console.error('❌ Shopify test failed:', error);
+    logger.error('Shopify test failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function testWordPress() {
+  try {
+    const response = await fetch('https://44.202.122.176/wp-json/wp/v2/posts', {
+      headers: {
+        Authorization: `Basic ${WP_AUTH}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`WordPress connection failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    logger.success(`Connected to WordPress as: ${data.name}`);
+    return { success: true, userName: data.name };
+  } catch (error) {
+    logger.error('WordPress test failed:', error);
     return { success: false, error: error.message };
   }
 }
@@ -195,7 +328,7 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const url = searchParams.get('url');
 
-  // If url param provided, fetch and parse that feed
+  // If url param provided, fetch and parse that feed (existing RSS functionality)
   if (url) {
     try {
       const res = await fetch(url);
@@ -244,11 +377,9 @@ export async function GET(req) {
         // Parse items
         feedData.items = Array.from(doc.querySelectorAll('item')).map(
           (item) => {
-            // Get all potential child elements
             const children = Array.from(item.children);
             const itemData = {};
 
-            // Extract standard RSS fields
             itemData.title = item.querySelector('title')?.textContent || '';
             itemData.link = item.querySelector('link')?.textContent || '';
             itemData.pubDate = item.querySelector('pubDate')?.textContent || '';
@@ -259,7 +390,6 @@ export async function GET(req) {
               item.querySelectorAll('category'),
             ).map((cat) => cat.textContent);
 
-            // Handle content with namespace
             const contentEncoded =
               item.querySelector('content\\:encoded') ||
               item.getElementsByTagNameNS('*', 'encoded')[0];
@@ -268,10 +398,28 @@ export async function GET(req) {
               itemData.content = contentEncoded.textContent || '';
             }
 
-            // Get all remaining elements as custom fields
+            const mediaThumbnail =
+              item.querySelector('media\\:thumbnail') ||
+              item.getElementsByTagNameNS('*', 'thumbnail')[0];
+
+            const mediaContent =
+              item.querySelector('media\\:content') ||
+              item.getElementsByTagNameNS('*', 'content')[0];
+
+            if (mediaThumbnail || mediaContent) {
+              itemData.media = {};
+
+              if (mediaThumbnail) {
+                itemData.media.thumbnail = mediaThumbnail.getAttribute('url');
+              }
+
+              if (mediaContent) {
+                itemData.media.content = mediaContent.getAttribute('url');
+              }
+            }
+
             children.forEach((child) => {
               const nodeName = child.nodeName.toLowerCase();
-              // Skip nodes we've already processed
               if (
                 ![
                   'title',
@@ -282,13 +430,11 @@ export async function GET(req) {
                   'category',
                 ].includes(nodeName)
               ) {
-                // Handle namespaced elements
                 if (nodeName.includes(':')) {
                   const [namespace, name] = nodeName.split(':');
                   if (!itemData[namespace]) itemData[namespace] = {};
                   itemData[namespace][name] = child.textContent;
                 } else {
-                  // Only add if not already processed
                   if (!itemData[nodeName]) {
                     itemData[nodeName] = child.textContent;
                   }
@@ -300,7 +446,6 @@ export async function GET(req) {
           },
         );
       } else if (feedType === 'atom') {
-        // Atom feed handling
         feedData.title = doc.querySelector('feed > title')?.textContent || '';
         feedData.description =
           doc.querySelector('feed > subtitle')?.textContent || '';
@@ -313,7 +458,6 @@ export async function GET(req) {
         feedData.lastBuildDate =
           doc.querySelector('feed > updated')?.textContent || '';
 
-        // Parse entries
         feedData.items = Array.from(doc.querySelectorAll('entry')).map(
           (entry) => {
             const itemData = {};
@@ -347,14 +491,12 @@ export async function GET(req) {
           },
         );
       } else if (feedType === 'rdf') {
-        // RDF feed handling
         feedData.title =
           doc.querySelector('channel > title')?.textContent || '';
         feedData.description =
           doc.querySelector('channel > description')?.textContent || '';
         feedData.link = doc.querySelector('channel > link')?.textContent || '';
 
-        // Parse items
         feedData.items = Array.from(doc.querySelectorAll('item')).map(
           (item) => {
             const itemData = {};
@@ -364,7 +506,6 @@ export async function GET(req) {
             itemData.description =
               item.querySelector('description')?.textContent || '';
 
-            // Handle Dublin Core metadata if present
             const dcCreator =
               item.querySelector('dc\\:creator') ||
               item.getElementsByTagNameNS('*', 'creator')[0];
@@ -384,7 +525,6 @@ export async function GET(req) {
         );
       }
 
-      // Return complete feed data
       return new Response(JSON.stringify(feedData), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -398,11 +538,126 @@ export async function GET(req) {
     }
   }
 
-  // Otherwise return list of feed URLs
-  return new Response(JSON.stringify({ feeds: feedList }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  // If no URL param, return stored humanized blog data
+  try {
+    logger.info('Fetching humanized blog data from database');
+
+    // Fetch all humanized blog data with publishing information
+    const { data: humanizedBlogs, error } = await supabase
+      .from('Humanize_Data')
+      .select(
+        `
+        id,
+        humanize_Data,
+        created_at,
+        shopify_article_id,
+        shopify_url,
+        shopify_handle,
+        published_to_shopify,
+        shopify_created_at,
+        shopify_error,
+        wp_post_id,
+        wp_url,
+        wp_slug,
+        wp_published,
+        wp_published_at,
+        wp_error,
+        rss_feed_data_column,
+        rss_feed_data:rss_feed_data_column (
+          id,
+          blog_url,
+          feed_id,
+          rss_feeds:feed_id (
+            id,
+            feed_url
+          )
+        )
+      `,
+      )
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      logger.error('Database error fetching humanized blogs:', error);
+      return new Response(JSON.stringify({ error: 'Database error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Transform data to match your frontend expectations
+    const transformedData = humanizedBlogs.map((item) => ({
+      id: item.id,
+      humanize_Data: item.humanize_Data,
+      created_at: item.created_at,
+      publishing_status: {
+        shopify: {
+          published: item.published_to_shopify || false,
+          article_id: item.shopify_article_id,
+          url: item.shopify_url,
+          handle: item.shopify_handle,
+          published_at: item.shopify_created_at,
+          error: item.shopify_error,
+        },
+        wordpress: {
+          published: item.wp_published || false,
+          post_id: item.wp_post_id,
+          url: item.wp_url,
+          slug: item.wp_slug,
+          published_at: item.wp_published_at,
+          error: item.wp_error,
+        },
+      },
+      source_info: {
+        rss_item_id: item.rss_feed_data_column,
+        original_url: item.rss_feed_data?.blog_url,
+        feed_url: item.rss_feed_data?.rss_feeds?.feed_url,
+        feed_id: item.rss_feed_data?.feed_id,
+      },
+      is_published_anywhere: item.published_to_shopify || item.wp_published,
+      is_dual_published: item.published_to_shopify && item.wp_published,
+      has_errors: !!(item.shopify_error || item.wp_error),
+      live_urls: {
+        shopify: item.shopify_url,
+        wordpress: item.wp_url,
+      },
+    }));
+
+    // Calculate summary stats
+    const summary = {
+      total: transformedData.length,
+      shopifyPublished: transformedData.filter(
+        (item) => item.publishing_status.shopify.published,
+      ).length,
+      wordpressPublished: transformedData.filter(
+        (item) => item.publishing_status.wordpress.published,
+      ).length,
+      dualPublished: transformedData.filter((item) => item.is_dual_published)
+        .length,
+      unpublished: transformedData.filter((item) => !item.is_published_anywhere)
+        .length,
+    };
+
+    logger.success(
+      `Successfully fetched ${transformedData.length} humanized blogs`,
+    );
+
+    return new Response(
+      JSON.stringify({
+        data: transformedData,
+        summary,
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
+  } catch (error) {
+    logger.error('API error fetching humanized blogs:', error);
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 }
 
 // Extract multiple image URLs from HTML content
@@ -673,7 +928,7 @@ function customExtractImagesFromHTML(html, baseUrl = '') {
   }
 }
 
-// UPDATED processItem function with selective processing support
+// UPDATED processItem function with DUAL publishing (Shopify + WordPress)
 async function processItem(
   item,
   index,
@@ -684,12 +939,12 @@ async function processItem(
   try {
     // Skip items without a link
     if (!item.link) {
-      console.log(`⚠️ Skipping item ${index} - no link available`);
+      logger.info(`Skipping item ${index} - no link available`);
       return { status: 'error', error: 'No link available' };
     }
 
-    console.log(
-      `📝 Processing item ${index + 1}/${totalItems}: ${item.title?.substring(
+    logger.info(
+      `Processing item ${index + 1}/${totalItems}: ${item.title?.substring(
         0,
         30,
       )}... ${shouldHumanize ? '(with humanization)' : '(raw only)'}`,
@@ -705,7 +960,7 @@ async function processItem(
       .select('id');
 
     if (rssItemError) {
-      console.error(`❌ Error inserting into rss_feed_data:`, rssItemError);
+      logger.error(`Error inserting into rss_feed_data:`, rssItemError);
       return { status: 'error', error: rssItemError };
     }
 
@@ -713,18 +968,20 @@ async function processItem(
 
     // If no humanization needed, just return basic processing
     if (!shouldHumanize) {
-      console.log(`⏭️ Skipping humanization for item ${index + 1}`);
+      logger.info(`Skipping humanization for item ${index + 1}`);
       return {
         status: 'success',
         rssItemId,
         shopifySuccess: false,
+        wordpressSuccess: false,
         shopifyArticleId: null,
+        wordpressPostId: null,
         humanized: false,
       };
     }
 
     // 2. Fetch full HTML content from the blog URL
-    console.log(`🌐 Fetching full HTML from: ${item.link}`);
+    logger.info(`Fetching full HTML from: ${item.link}`);
     let fullHtmlContent = '';
     let fullTextContent = '';
     let fullMarkdownContent = ''; // Will be filled with our custom HTML to Markdown conversion
@@ -1083,10 +1340,10 @@ async function processItem(
         fullMarkdownContent = markdown;
       }
 
-      console.log(`✅ Successfully fetched and parsed HTML from ${item.link}`);
+      logger.success(`Successfully fetched and parsed HTML from ${item.link}`);
     } catch (fetchError) {
-      console.error(
-        `⚠️ Error fetching HTML from ${item.link}:`,
+      logger.error(
+        `Error fetching HTML from ${item.link}:`,
         fetchError.message,
       );
       // Continue with RSS data if HTML fetch fails
@@ -1208,8 +1465,6 @@ INSTRUCTIONS:
 9. Remove any unnecessary or redundant content like navigation elements, footers, etc.
 10. Ensure the content flows naturally and reads professionally
 11. If categories are available, incorporate them as tags at the end
-12. Incorporate the original source and author as a reference at the end
-
 IMPORTANT: Your output must be in perfect markdown format, ready to be displayed as a professional blog post. Focus on delivering valuable content without any website cruft or unnecessary elements.
 
 Return ONLY the markdown blog content, with no extra commentary. It should be ready to display as-is. don't show "markdown" in the starting just show the tile as # title`;
@@ -1223,14 +1478,11 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
         0.7,
       );
       enhancedBlogMarkdown = aiRes.choices[0]?.message?.content || '';
-      console.log(
-        `🤖 OpenAI blog creation: ${enhancedBlogMarkdown.substring(0, 100)}...`,
+      logger.info(
+        `OpenAI blog creation: ${enhancedBlogMarkdown.substring(0, 100)}...`,
       );
     } catch (openAiError) {
-      console.error(
-        `❌ Failed to create blog with OpenAI:`,
-        openAiError.message,
-      );
+      logger.error(`Failed to create blog with OpenAI:`, openAiError.message);
 
       // If OpenAI fails, create a basic markdown blog from available data
       enhancedBlogMarkdown = `# ${blogData.title}\n\n`;
@@ -1254,11 +1506,11 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
       // Add description/content
       enhancedBlogMarkdown += `${blogData.description_text.substring(
         0,
-        1000,
+        10000,
       )}...\n\n`;
 
       // Add link to original
-      enhancedBlogMarkdown += `[Read the full article](${blogData.url})\n\n`;
+      // enhancedBlogMarkdown += `[Read the full article](${blogData.url})\n\n`;
 
       // Add categories if available
       if (blogData.categories && blogData.categories.length > 0) {
@@ -1273,7 +1525,7 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
 
     try {
       // First try with StealthGPT
-      console.log(`🔄 Trying StealthGPT for item ${index + 1}`);
+      logger.info(`Trying StealthGPT for item ${index + 1}`);
 
       const requestBody = {
         prompt: enhancedBlogMarkdown,
@@ -1296,13 +1548,13 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
           result.text || result.output || result.rephrased_text;
 
         if (stealthText) {
-          console.log(`✅ StealthGPT succeeded for item ${index + 1}`);
+          logger.success(`StealthGPT succeeded for item ${index + 1}`);
           humanizedBlogMarkdown = stealthText;
         }
       } else {
         // If StealthGPT fails, use OpenAI as fallback with retry logic
-        console.log(
-          `⚠️ StealthGPT failed, falling back to OpenAI for item ${index + 1}`,
+        logger.info(
+          `StealthGPT failed, falling back to OpenAI for item ${index + 1}`,
         );
 
         const fallbackPrompt = `
@@ -1320,17 +1572,14 @@ Only return the improved markdown, nothing else. Maintain all headings, images, 
           );
           humanizedBlogMarkdown =
             fallbackRes.choices[0]?.message?.content || enhancedBlogMarkdown;
-          console.log(`✅ OpenAI fallback succeeded for item ${index + 1}`);
+          logger.success(`OpenAI fallback succeeded for item ${index + 1}`);
         } catch (fallbackError) {
-          console.error(`❌ OpenAI fallback failed: ${fallbackError.message}`);
+          logger.error(`OpenAI fallback failed: ${fallbackError.message}`);
           // Keep original enhanced blog markdown
         }
       }
     } catch (err) {
-      console.error(
-        `❌ Humanization error for item ${index + 1}:`,
-        err.message,
-      );
+      logger.error(`Humanization error for item ${index + 1}:`, err.message);
       // Keep the original enhanced blog markdown if humanization fails
     }
 
@@ -1344,63 +1593,100 @@ Only return the improved markdown, nothing else. Maintain all headings, images, 
       .select('id');
 
     if (humanizeError) {
-      console.error(`❌ Error inserting into Humanize_Data:`, humanizeError);
+      logger.error(`Error inserting into Humanize_Data:`, humanizeError);
       return { status: 'error', error: humanizeError, rssItemId };
     }
 
     const humanizeDataId = humanizeData[0].id;
 
-    // 7. NEW: Push to Shopify
-    console.log(`🛍️ Pushing to Shopify: ${index + 1}/${totalItems}`);
+    // 7. DUAL PUBLISHING - Shopify AND WordPress
+    logger.info(
+      `Publishing to both Shopify and WordPress: ${index + 1}/${totalItems}`,
+    );
+
+    // Publish to Shopify
     const shopifyResult = await createShopifyBlogPost(
       humanizedBlogMarkdown,
       blogData,
     );
 
-    if (shopifyResult.success) {
-      // Update database with Shopify info
-      await supabase
-        .from('Humanize_Data')
-        .update({
-          shopify_article_id: shopifyResult.articleId,
-          shopify_url: shopifyResult.url,
-          shopify_handle: shopifyResult.handle,
-          published_to_shopify: true,
-          shopify_created_at: new Date().toISOString(),
-        })
-        .eq('id', humanizeDataId);
+    // Publish to WordPress
+    const wordpressResult = await createWordPressBlogPost(
+      humanizedBlogMarkdown,
+      blogData,
+    );
 
-      console.log(
-        `✅ Successfully pushed to Shopify: ${shopifyResult.articleId}`,
+    // 8. Update database with both publication results
+    const updateData = {
+      // Shopify fields
+      shopify_article_id: shopifyResult.success
+        ? shopifyResult.articleId
+        : null,
+      shopify_url: shopifyResult.success ? shopifyResult.url : null,
+      shopify_handle: shopifyResult.success ? shopifyResult.handle : null,
+      published_to_shopify: shopifyResult.success,
+      shopify_created_at: shopifyResult.success
+        ? new Date().toISOString()
+        : null,
+      shopify_error: shopifyResult.success ? null : shopifyResult.error,
+
+      // WordPress fields
+      wp_post_id: wordpressResult.success ? wordpressResult.postId : null,
+      wp_url: wordpressResult.success ? wordpressResult.url : null,
+      wp_slug: wordpressResult.success ? wordpressResult.slug : null,
+      wp_published: wordpressResult.success,
+      wp_published_at: wordpressResult.success
+        ? new Date().toISOString()
+        : null,
+      wp_error: wordpressResult.success ? null : wordpressResult.error,
+    };
+
+    await supabase
+      .from('Humanize_Data')
+      .update(updateData)
+      .eq('id', humanizeDataId);
+
+    // Log results
+    if (shopifyResult.success && wordpressResult.success) {
+      logger.success(
+        `Successfully published to BOTH platforms for item ${index + 1}`,
+        {
+          shopify_id: shopifyResult.articleId,
+          wordpress_id: wordpressResult.postId,
+        },
       );
+    } else if (shopifyResult.success || wordpressResult.success) {
+      logger.info(`Partial success for item ${index + 1}`, {
+        shopify: shopifyResult.success,
+        wordpress: wordpressResult.success,
+      });
     } else {
-      // Log error but continue processing
-      await supabase
-        .from('Humanize_Data')
-        .update({
-          published_to_shopify: false,
+      logger.error(
+        `Failed to publish to both platforms for item ${index + 1}`,
+        {
           shopify_error: shopifyResult.error,
-        })
-        .eq('id', humanizeDataId);
-
-      console.error(`❌ Shopify push failed: ${shopifyResult.error}`);
+          wordpress_error: wordpressResult.error,
+        },
+      );
     }
 
-    console.log(`✅ Successfully processed item ${index + 1}`);
+    logger.success(`Successfully processed item ${index + 1}`);
     return {
       status: 'success',
       rssItemId,
       shopifySuccess: shopifyResult.success,
       shopifyArticleId: shopifyResult.success ? shopifyResult.articleId : null,
+      wordpressSuccess: wordpressResult.success,
+      wordpressPostId: wordpressResult.success ? wordpressResult.postId : null,
       humanized: true,
     };
   } catch (itemError) {
-    console.error(`❌ Error processing item ${index}:`, itemError);
+    logger.error(`Error processing item ${index}:`, itemError);
     return { status: 'error', error: itemError };
   }
 }
 
-// UPDATED Process and humanize feed content with selective processing
+// UPDATED Process and humanize feed content with dual publishing tracking
 async function processFeedContent(feedData, feedId, selectedIndices = null) {
   const results = {
     total: feedData.items.length,
@@ -1408,13 +1694,16 @@ async function processFeedContent(feedData, feedId, selectedIndices = null) {
     errors: 0,
     shopifyPosts: 0,
     shopifyErrors: 0,
+    wordpressPosts: 0,
+    wordpressErrors: 0,
+    dualSuccess: 0, // Published to both platforms
     humanized: 0,
     skipped: 0,
     rss_feed_data_ids: [],
   };
 
-  console.log(
-    `🔍 Processing ${feedData.items.length} items from feed${
+  logger.info(
+    `Processing ${feedData.items.length} items from feed${
       selectedIndices
         ? ` (${selectedIndices.length} selected for humanization)`
         : ' (all humanized)'
@@ -1447,15 +1736,18 @@ async function processFeedContent(feedData, feedId, selectedIndices = null) {
 
       if (result.humanized) {
         results.humanized++;
+
+        // Track publishing success
+        if (result.shopifySuccess) results.shopifyPosts++;
+        if (result.wordpressSuccess) results.wordpressPosts++;
+        if (result.shopifySuccess && result.wordpressSuccess)
+          results.dualSuccess++;
+
+        // Track publishing errors
+        if (!result.shopifySuccess) results.shopifyErrors++;
+        if (!result.wordpressSuccess) results.wordpressErrors++;
       } else {
         results.skipped++;
-      }
-
-      if (result.shopifySuccess) {
-        results.shopifyPosts++;
-      } else if (result.humanized) {
-        // Only count as error if it was supposed to be humanized
-        results.shopifyErrors++;
       }
     } else {
       results.errors++;
@@ -1468,7 +1760,7 @@ async function processFeedContent(feedData, feedId, selectedIndices = null) {
   return results;
 }
 
-// UPDATED POST function with selective processing support
+// UPDATED POST function with dual publishing support
 export async function POST(req) {
   try {
     const { url, selectedItems, feedData } = await req.json();
@@ -1477,11 +1769,9 @@ export async function POST(req) {
       throw new Error('Invalid or missing URL');
     }
 
-    console.log(`🌐 Processing RSS feed: ${url}`);
+    logger.info(`Processing RSS feed: ${url}`);
     if (selectedItems) {
-      console.log(
-        `🎯 Selected items for humanization: ${selectedItems.length}`,
-      );
+      logger.info(`Selected items for humanization: ${selectedItems.length}`);
     }
 
     // 1. Check if feed already exists in the database
@@ -1492,7 +1782,7 @@ export async function POST(req) {
       .limit(1);
 
     if (feedCheckError) {
-      console.error('❌ Error checking for existing feed:', feedCheckError);
+      logger.error('Error checking for existing feed:', feedCheckError);
       throw new Error('Database error when checking for existing feed');
     }
 
@@ -1501,7 +1791,7 @@ export async function POST(req) {
     if (existingFeeds && existingFeeds.length > 0) {
       // Feed already exists, use its ID
       feedId = existingFeeds[0].id;
-      console.log(`📋 Feed already exists with ID: ${feedId}`);
+      logger.info(`Feed already exists with ID: ${feedId}`);
     } else {
       // Insert new feed
       const { data: newFeed, error: insertFeedError } = await supabase
@@ -1510,12 +1800,12 @@ export async function POST(req) {
         .select('id');
 
       if (insertFeedError || !newFeed) {
-        console.error('❌ Error inserting feed URL:', insertFeedError);
+        logger.error('Error inserting feed URL:', insertFeedError);
         throw new Error('Failed to insert feed URL into database');
       }
 
       feedId = newFeed[0].id;
-      console.log(`📝 Created new feed with ID: ${feedId}`);
+      logger.info(`Created new feed with ID: ${feedId}`);
     }
 
     // 2. Use provided feedData if available, otherwise fetch and parse
@@ -1524,12 +1814,12 @@ export async function POST(req) {
     if (feedData && selectedItems) {
       // Use the pre-filtered feed data from UI
       processedFeedData = feedData;
-      console.log(
-        `🎯 Using pre-filtered feed data with ${feedData.items.length} items`,
+      logger.info(
+        `Using pre-filtered feed data with ${feedData.items.length} items`,
       );
     } else {
       // Fetch and parse the RSS feed (original behavior)
-      console.log(`🌐 Fetching fresh RSS feed data`);
+      logger.info(`Fetching fresh RSS feed data`);
 
       const res = await fetch(url);
       if (!res.ok) {
@@ -1730,18 +2020,16 @@ export async function POST(req) {
       }
     }
 
-    console.log(
-      `🔍 Feed parsed. Found ${processedFeedData.items.length} items`,
-    );
+    logger.info(`Feed parsed. Found ${processedFeedData.items.length} items`);
 
-    // 3. Process the feed content with selective humanization
+    // 3. Process the feed content with selective humanization and dual publishing
     const processingResults = await processFeedContent(
       processedFeedData,
       feedId,
       selectedItems,
     );
 
-    // 4. Return success response with detailed stats
+    // 4. Return success response with dual publishing stats
     return new Response(
       JSON.stringify({
         success: true,
@@ -1752,10 +2040,17 @@ export async function POST(req) {
         errors: processingResults.errors,
         humanized: processingResults.humanized,
         skipped: processingResults.skipped,
+        // Shopify stats
         shopifyPosts: processingResults.shopifyPosts,
         shopifyErrors: processingResults.shopifyErrors,
+        // WordPress stats
+        wordpressPosts: processingResults.wordpressPosts,
+        wordpressErrors: processingResults.wordpressErrors,
+        // Dual publishing stats
+        dualSuccess: processingResults.dualSuccess,
         rss_feed_data_ids: processingResults.rss_feed_data_ids,
         selective: !!selectedItems,
+        platforms: ['Shopify', 'WordPress'], // Indicates dual publishing
       }),
       {
         status: 200,
@@ -1763,7 +2058,7 @@ export async function POST(req) {
       },
     );
   } catch (err) {
-    console.error('🔥 RSS processing error:', err);
+    logger.error('RSS processing error:', err);
     return new Response(
       JSON.stringify({
         success: false,
