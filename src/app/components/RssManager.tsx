@@ -364,7 +364,7 @@ export default function RssManager({ theme }: RssManagerProps) {
     if (!isProcessing && !results) return null;
 
     return (
-      <div className='fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-6'>
+      <div className='fixed top-0 h-screen w-screen inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-6'>
         <div className='bg-gray-900 rounded-xl shadow-2xl max-w-md w-full p-6 border border-gray-800'>
           <h3 className='text-xl font-semibold text-white mb-4 flex items-center'>
             <Rss className='mr-2 h-5 w-5 text-blue-400' />
@@ -489,7 +489,7 @@ export default function RssManager({ theme }: RssManagerProps) {
           </p>
         </header>
 
-        <div className='grid grid-cols-1 lg:grid-cols-4 gap-6'>
+        <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
           {/* Left column - Feed management */}
           <div className='lg:col-span-1'>
             <div className='bg-gray-900 rounded-xl p-5 shadow-lg mb-6'>
@@ -521,11 +521,10 @@ export default function RssManager({ theme }: RssManagerProps) {
                     disabled={
                       processingStatus.isProcessing || selectedItems.size === 0
                     }
-                    className={`w-full bg-green-600 text-white font-medium rounded-lg py-3 px-4 flex items-center justify-center transition-all duration-200 ${
-                      processingStatus.isProcessing || selectedItems.size === 0
-                        ? 'opacity-60 cursor-not-allowed'
-                        : 'hover:bg-green-700'
-                    }`}
+                    className={`w-full bg-green-600 text-white font-medium rounded-lg py-3 px-4 flex items-center justify-center transition-all duration-200 ${processingStatus.isProcessing || selectedItems.size === 0
+                      ? 'opacity-60 cursor-not-allowed'
+                      : 'hover:bg-green-700'
+                      }`}
                   >
                     {processingStatus.isProcessing ? (
                       <>
@@ -540,11 +539,10 @@ export default function RssManager({ theme }: RssManagerProps) {
                   <button
                     onClick={addFeed}
                     disabled={loadingItems || !feedUrl.trim()}
-                    className={`w-full bg-blue-600 text-white font-medium rounded-lg py-3 px-4 flex items-center justify-center transition-all duration-200 ${
-                      loadingItems || !feedUrl.trim()
-                        ? 'opacity-60 cursor-not-allowed'
-                        : 'hover:bg-blue-700'
-                    }`}
+                    className={`w-full bg-blue-600 text-white font-medium rounded-lg py-3 px-4 flex items-center justify-center transition-all duration-200 ${loadingItems || !feedUrl.trim()
+                      ? 'opacity-60 cursor-not-allowed'
+                      : 'hover:bg-blue-700'
+                      }`}
                   >
                     {loadingItems ? (
                       <>
@@ -595,26 +593,24 @@ export default function RssManager({ theme }: RssManagerProps) {
                     ))}
                   </div>
                 ) : feeds.length ? (
-                  <div className='space-y-2 max-h-96 overflow-y-auto pr-1 custom-scrollbar'>
+                  <div className='space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar'>
                     {feeds.map((feed) => (
                       <div
                         key={feed.id}
-                        className={`p-3 rounded-lg transition-all duration-200 flex items-center group ${
-                          selectedFeed === feed.feed_url
-                            ? 'bg-blue-600/20 border border-blue-500/40'
-                            : 'bg-gray-800 border border-transparent hover:border-gray-700 hover:bg-gray-800/80'
-                        }`}
+                        className={`p-3 rounded-lg transition-all duration-200 flex items-center group ${selectedFeed === feed.feed_url
+                          ? 'bg-blue-600/20 border border-blue-500/40'
+                          : 'bg-gray-800 border border-transparent hover:border-gray-700 hover:bg-gray-800/80'
+                          }`}
                       >
                         <div
                           className='flex items-center flex-1 cursor-pointer'
                           onClick={() => selectFeed(feed.feed_url)}
                         >
                           <Rss
-                            className={`h-4 w-4 mr-3 flex-shrink-0 ${
-                              selectedFeed === feed.feed_url
-                                ? 'text-blue-400'
-                                : 'text-gray-500 group-hover:text-gray-400'
-                            }`}
+                            className={`h-4 w-4 mr-3 flex-shrink-0 ${selectedFeed === feed.feed_url
+                              ? 'text-blue-400'
+                              : 'text-gray-500 group-hover:text-gray-400'
+                              }`}
                           />
                           <div className='truncate text-sm'>
                             {truncateUrl(feed.feed_url)}
@@ -643,7 +639,7 @@ export default function RssManager({ theme }: RssManagerProps) {
           </div>
 
           {/* Right column - Feed content */}
-          <div className='lg:col-span-3'>
+          <div className='lg:col-span-1'>
             {selectedFeed && currentFeedData ? (
               <div className='bg-gray-900 rounded-xl p-5 shadow-lg'>
                 {/* Feed Info */}
@@ -718,11 +714,10 @@ export default function RssManager({ theme }: RssManagerProps) {
                       return (
                         <div
                           key={index}
-                          className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                            isSelected
-                              ? 'border-blue-500 bg-blue-950/20'
-                              : 'border-gray-700 hover:border-gray-600'
-                          }`}
+                          className={`border rounded-lg p-4 cursor-pointer transition-all ${isSelected
+                            ? 'border-blue-500 bg-blue-950/20'
+                            : 'border-gray-700 hover:border-gray-600'
+                            }`}
                           onClick={() => toggleItemSelection(index)}
                         >
                           <div className='flex items-start gap-4'>
