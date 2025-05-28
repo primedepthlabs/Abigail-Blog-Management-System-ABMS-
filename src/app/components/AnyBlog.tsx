@@ -317,9 +317,9 @@ const BlogHumanizerUI = () => {
   };
 
   const getStatusColor = (isPublished: boolean, hasErrors: boolean) => {
-    if (hasErrors) return 'text-red-600 bg-red-100';
-    if (isPublished) return 'text-green-600 bg-green-100';
-    return 'text-gray-600 bg-gray-100';
+    if (hasErrors) return 'text-red-400 bg-red-900/30';
+    if (isPublished) return 'text-green-400 bg-green-900/30';
+    return 'text-gray-400 bg-gray-700/30';
   };
 
   const getStatusText = (isPublished: boolean, hasErrors: boolean) => {
@@ -329,19 +329,19 @@ const BlogHumanizerUI = () => {
   };
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6'>
+    <div className='min-h-screen bg-gray-900 p-6'>
       <div className='max-w-6xl mx-auto'>
         {/* Header */}
         <div className='text-center mb-8'>
           <div className='flex items-center justify-center mb-4'>
-            <div className='bg-gradient-to-r from-blue-600 to-purple-600 p-3 rounded-xl'>
+            <div className='bg-gradient-to-r from-blue-500 to-purple-500 p-3 rounded-xl'>
               <span className='text-white text-2xl'>⚡</span>
             </div>
           </div>
-          <h1 className='text-3xl font-bold text-gray-800 mb-2'>
+          <h1 className='text-3xl font-bold text-white mb-2'>
             Blog Humanizer
           </h1>
-          <p className='text-gray-600 max-w-2xl mx-auto'>
+          <p className='text-gray-300 max-w-2xl mx-auto'>
             Transform any blog post into engaging, humanized content and
             automatically publish to Shopify and WordPress.
           </p>
@@ -349,14 +349,13 @@ const BlogHumanizerUI = () => {
 
         {/* Navigation Tabs */}
         <div className='flex justify-center mb-8'>
-          <div className='bg-white rounded-lg p-1 shadow-lg'>
+          <div className='bg-gray-800 rounded-lg p-1 shadow-lg border border-gray-700'>
             <button
               onClick={() => setShowRecords(false)}
-              className={`px-6 py-2 rounded-md font-medium transition-colors ${
-                !showRecords
+              className={`px-6 py-2 rounded-md font-medium transition-colors ${!showRecords
                   ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
+                  : 'text-gray-300 hover:text-white'
+                }`}
             >
               ⚡ Process Blog
             </button>
@@ -365,11 +364,10 @@ const BlogHumanizerUI = () => {
                 setShowRecords(true);
                 fetchBlogRecords();
               }}
-              className={`px-6 py-2 rounded-md font-medium transition-colors ${
-                showRecords
+              className={`px-6 py-2 rounded-md font-medium transition-colors ${showRecords
                   ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
+                  : 'text-gray-300 hover:text-white'
+                }`}
             >
               🗄️ View Records
             </button>
@@ -380,10 +378,10 @@ const BlogHumanizerUI = () => {
         {!showRecords && (
           <>
             {/* Main Input Section */}
-            <div className='bg-white rounded-2xl shadow-xl p-8 mb-8'>
+            <div className='bg-gray-800 rounded-2xl shadow-xl p-8 mb-8 border border-gray-700'>
               <div className='flex items-center mb-6'>
                 <span className='text-2xl mr-3'>🌐</span>
-                <h2 className='text-xl font-semibold text-gray-800'>
+                <h2 className='text-xl font-semibold text-white'>
                   Enter Blog URL
                 </h2>
               </div>
@@ -392,7 +390,7 @@ const BlogHumanizerUI = () => {
                 <div>
                   <label
                     htmlFor='blogUrl'
-                    className='block text-sm font-medium text-gray-700 mb-2'
+                    className='block text-sm font-medium text-gray-300 mb-2'
                   >
                     Blog Post URL
                   </label>
@@ -403,16 +401,16 @@ const BlogHumanizerUI = () => {
                       value={blogUrl}
                       onChange={(e) => setBlogUrl(e.target.value)}
                       placeholder='https://example.com/blog-post'
-                      className='w-full text-black px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors  '
+                      className='w-full text-white px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors placeholder-gray-400'
                       disabled={isProcessing}
                     />
                   </div>
                 </div>
 
                 {error && (
-                  <div className='bg-red-50 border border-red-200 rounded-lg p-4 flex items-center'>
-                    <span className='text-red-500 text-xl mr-3'>⚠️</span>
-                    <span className='text-red-700'>{error}</span>
+                  <div className='bg-red-900/30 border border-red-700 rounded-lg p-4 flex items-center'>
+                    <span className='text-red-400 text-xl mr-3'>⚠️</span>
+                    <span className='text-red-300'>{error}</span>
                   </div>
                 )}
 
@@ -438,7 +436,7 @@ const BlogHumanizerUI = () => {
                   {(result || error) && (
                     <button
                       onClick={resetForm}
-                      className='px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors'
+                      className='px-6 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors'
                     >
                       Reset
                     </button>
@@ -449,16 +447,15 @@ const BlogHumanizerUI = () => {
 
             {/* Processing Steps */}
             {(isProcessing || processingSteps.length > 0) && (
-              <div className='bg-white rounded-2xl shadow-xl p-8 mb-8'>
+              <div className='bg-gray-800 rounded-2xl shadow-xl p-8 mb-8 border border-gray-700'>
                 <div className='flex items-center mb-6'>
                   <span
-                    className={`text-2xl mr-3 ${
-                      isProcessing ? 'animate-spin' : ''
-                    }`}
+                    className={`text-2xl mr-3 ${isProcessing ? 'animate-spin' : ''
+                      }`}
                   >
                     {isProcessing ? '⏳' : '✅'}
                   </span>
-                  <h2 className='text-xl font-semibold text-gray-800'>
+                  <h2 className='text-xl font-semibold text-white'>
                     Processing Status
                   </h2>
                 </div>
@@ -467,22 +464,20 @@ const BlogHumanizerUI = () => {
                   {processingSteps.map((step, index) => (
                     <div key={index} className='flex items-center'>
                       <div
-                        className={`w-2 h-2 rounded-full mr-3 ${
-                          step.includes('✅')
+                        className={`w-2 h-2 rounded-full mr-3 ${step.includes('✅')
                             ? 'bg-green-500'
                             : step.includes('❌')
-                            ? 'bg-red-500'
-                            : 'bg-blue-500'
-                        }`}
+                              ? 'bg-red-500'
+                              : 'bg-blue-500'
+                          }`}
                       />
                       <span
-                        className={`text-sm ${
-                          step.includes('✅')
-                            ? 'text-green-700 font-medium'
+                        className={`text-sm ${step.includes('✅')
+                            ? 'text-green-300 font-medium'
                             : step.includes('❌')
-                            ? 'text-red-700 font-medium'
-                            : 'text-gray-600'
-                        }`}
+                              ? 'text-red-300 font-medium'
+                              : 'text-gray-300'
+                          }`}
                       >
                         {step}
                       </span>
@@ -494,28 +489,25 @@ const BlogHumanizerUI = () => {
 
             {/* Results Section */}
             {result && (
-              <div className='bg-white rounded-2xl shadow-xl p-8'>
+              <div className='bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-700'>
                 <div className='flex items-center mb-6'>
                   <span className='text-2xl mr-3'>✅</span>
-                  <h2 className='text-xl font-semibold text-gray-800'>
+                  <h2 className='text-xl font-semibold text-white'>
                     Processing Complete!
                   </h2>
                 </div>
 
                 {/* Blog Info */}
                 {result.blogData && (
-                  <div className='bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6'>
-                    <h3 className='font-semibold text-gray-800 mb-2'>
+                  <div className='bg-gray-700 border border-gray-600 rounded-lg p-4 mb-6'>
+                    <h3 className='font-semibold text-white mb-2'>
                       {result.blogData.title}
                     </h3>
-                    <div className='text-sm text-gray-600 space-y-1'>
+                    <div className='text-sm text-gray-300 space-y-1'>
                       <p>
                         <strong>Author:</strong>{' '}
                         {result.blogData.author || 'Unknown'}
                       </p>
-                      {/* <p>
-                        <strong>Source:</strong> {result.blogData.source_domain}
-                      </p> */}
                       <p>
                         <strong>Published:</strong>{' '}
                         {result.blogData.pubDate || 'Unknown'}
@@ -526,16 +518,16 @@ const BlogHumanizerUI = () => {
 
                 <div className='grid md:grid-cols-2 gap-6 mb-6'>
                   {/* Shopify Results */}
-                  <div className='bg-green-50 border border-green-200 rounded-lg p-6'>
+                  <div className='bg-green-900/20 border border-green-800 rounded-lg p-6'>
                     <div className='flex items-center mb-4'>
                       <div className='bg-green-600 p-2 rounded-lg'>
                         <span className='text-white text-lg'>🛒</span>
                       </div>
                       <div className='ml-3'>
-                        <h3 className='font-semibold text-green-800'>
+                        <h3 className='font-semibold text-green-300'>
                           Shopify
                         </h3>
-                        <p className='text-sm text-green-600'>
+                        <p className='text-sm text-green-400'>
                           {result.shopifySuccess
                             ? 'Published Successfully'
                             : 'Publishing Failed'}
@@ -545,7 +537,7 @@ const BlogHumanizerUI = () => {
 
                     {result.shopifySuccess ? (
                       <div className='space-y-2'>
-                        <p className='text-sm text-gray-600'>
+                        <p className='text-sm text-gray-300'>
                           <strong>Article ID:</strong> {result.shopifyArticleId}
                         </p>
                         {result.shopifyUrl && (
@@ -553,7 +545,7 @@ const BlogHumanizerUI = () => {
                             href={result.shopifyUrl}
                             target='_blank'
                             rel='noopener noreferrer'
-                            className='inline-flex items-center text-sm text-green-600 hover:text-green-800'
+                            className='inline-flex items-center text-sm text-green-400 hover:text-green-300'
                           >
                             <span className='mr-1'>🔗</span>
                             View Live Post
@@ -561,23 +553,23 @@ const BlogHumanizerUI = () => {
                         )}
                       </div>
                     ) : (
-                      <p className='text-sm text-red-600'>
+                      <p className='text-sm text-red-400'>
                         {result.shopifyError}
                       </p>
                     )}
                   </div>
 
                   {/* WordPress Results */}
-                  <div className='bg-blue-50 border border-blue-200 rounded-lg p-6'>
+                  <div className='bg-blue-900/20 border border-blue-800 rounded-lg p-6'>
                     <div className='flex items-center mb-4'>
                       <div className='bg-blue-600 p-2 rounded-lg'>
                         <span className='text-white text-lg'>📝</span>
                       </div>
                       <div className='ml-3'>
-                        <h3 className='font-semibold text-blue-800'>
+                        <h3 className='font-semibold text-blue-300'>
                           WordPress
                         </h3>
-                        <p className='text-sm text-blue-600'>
+                        <p className='text-sm text-blue-400'>
                           {result.wordpressSuccess
                             ? 'Published Successfully'
                             : 'Publishing Failed'}
@@ -587,7 +579,7 @@ const BlogHumanizerUI = () => {
 
                     {result.wordpressSuccess ? (
                       <div className='space-y-2'>
-                        <p className='text-sm text-gray-600'>
+                        <p className='text-sm text-gray-300'>
                           <strong>Post ID:</strong> {result.wordpressPostId}
                         </p>
                         {result.wordpressUrl && (
@@ -595,7 +587,7 @@ const BlogHumanizerUI = () => {
                             href={result.wordpressUrl}
                             target='_blank'
                             rel='noopener noreferrer'
-                            className='inline-flex items-center text-sm text-blue-600 hover:text-blue-800'
+                            className='inline-flex items-center text-sm text-blue-400 hover:text-blue-300'
                           >
                             <span className='mr-1'>🔗</span>
                             View Live Post
@@ -603,7 +595,7 @@ const BlogHumanizerUI = () => {
                         )}
                       </div>
                     ) : (
-                      <p className='text-sm text-red-600'>
+                      <p className='text-sm text-red-400'>
                         {result.wordpressError}
                       </p>
                     )}
@@ -612,14 +604,14 @@ const BlogHumanizerUI = () => {
 
                 {/* Humanized Content Preview */}
                 {result.humanizedContent && (
-                  <div className='bg-gray-50 border border-gray-200 rounded-lg p-6'>
+                  <div className='bg-gray-700 border border-gray-600 rounded-lg p-6'>
                     <div className='flex items-center justify-between mb-4'>
-                      <h3 className='font-semibold text-gray-800'>
+                      <h3 className='font-semibold text-white'>
                         Humanized Content Preview
                       </h3>
                     </div>
-                    <div className='bg-white p-4 rounded border max-h-48 overflow-y-auto'>
-                      <div className='prose prose-sm max-w-none'>
+                    <div className='bg-gray-800 p-4 rounded border border-gray-600 max-h-48 overflow-y-auto'>
+                      <div className='prose prose-sm max-w-none text-gray-300'>
                         {result.humanizedContent.substring(0, 500)}...
                       </div>
                     </div>
@@ -640,7 +632,7 @@ const BlogHumanizerUI = () => {
                   </button>
                   <button
                     onClick={resetForm}
-                    className='px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors'
+                    className='px-6 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors'
                   >
                     Process Another
                   </button>
@@ -652,11 +644,11 @@ const BlogHumanizerUI = () => {
 
         {/* Records Section */}
         {showRecords && (
-          <div className='bg-white rounded-2xl shadow-xl p-8'>
+          <div className='bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-700'>
             <div className='flex items-center justify-between mb-6'>
               <div className='flex items-center'>
                 <span className='text-2xl mr-3'>🗄️</span>
-                <h2 className='text-xl font-semibold text-gray-800'>
+                <h2 className='text-xl font-semibold text-white'>
                   Humanized Blog Records
                 </h2>
               </div>
@@ -677,24 +669,24 @@ const BlogHumanizerUI = () => {
             {isLoadingRecords ? (
               <div className='flex items-center justify-center py-8'>
                 <span className='animate-spin text-4xl mr-3'>⏳</span>
-                <span className='text-gray-600'>Loading records...</span>
+                <span className='text-gray-300'>Loading records...</span>
               </div>
             ) : blogRecords.length === 0 ? (
               <div className='text-center py-8'>
                 <span className='text-6xl'>🗄️</span>
-                <p className='text-gray-600 mt-4'>No blog records found</p>
+                <p className='text-gray-300 mt-4'>No blog records found</p>
               </div>
             ) : (
               <div className='space-y-4'>
                 {blogRecords.map((record) => (
                   <div
                     key={record.id}
-                    className='border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow'
+                    className='border border-gray-600 rounded-lg p-6 hover:shadow-lg transition-shadow bg-gray-700/50'
                   >
                     <div className='flex items-start justify-between mb-4'>
                       <div className='flex-1'>
                         <div className='flex items-center mb-2'>
-                          <h3 className='font-semibold text-gray-800 mr-3'>
+                          <h3 className='font-semibold text-white mr-3'>
                             Blog Post #{record.id}
                           </h3>
                           <span
@@ -709,20 +701,7 @@ const BlogHumanizerUI = () => {
                             )}
                           </span>
                         </div>
-                        {/* {record.source_info.original_url && (
-                          <p className='text-sm text-gray-600 mb-2'>
-                            <strong>Original URL:</strong>{' '}
-                            <a
-                              href={record.source_info.original_url}
-                              target='_blank'
-                              rel='noopener noreferrer'
-                              className='text-blue-600 hover:text-blue-800'
-                            >
-                              {record.source_info.original_url}
-                            </a>
-                          </p>
-                        )} */}
-                        <div className='flex items-center text-sm text-gray-500'>
+                        <div className='flex items-center text-sm text-gray-400'>
                           <span className='mr-1'>📅</span>
                           <span>Created: {formatDate(record.created_at)}</span>
                         </div>
@@ -731,57 +710,57 @@ const BlogHumanizerUI = () => {
 
                     <div className='grid md:grid-cols-2 gap-4 mt-4'>
                       {/* Shopify Status */}
-                      <div className='flex items-center justify-between p-3 bg-gray-50 rounded-lg'>
+                      <div className='flex items-center justify-between p-3 bg-gray-800 rounded-lg border border-gray-600'>
                         <div className='flex items-center'>
-                          <span className='text-green-600 mr-2'>🛒</span>
-                          <span className='text-sm font-medium'>Shopify:</span>
+                          <span className='text-green-400 mr-2'>🛒</span>
+                          <span className='text-sm font-medium text-gray-300'>Shopify:</span>
                         </div>
                         <div className='flex items-center'>
                           {record.publishing_status.shopify.published ? (
                             <>
-                              <span className='text-green-600 mr-2'>✅</span>
+                              <span className='text-green-400 mr-2'>✅</span>
                               {record.live_urls.shopify && (
                                 <a
                                   href={record.live_urls.shopify}
                                   target='_blank'
                                   rel='noopener noreferrer'
-                                  className='text-xs text-blue-600 hover:text-blue-800'
+                                  className='text-xs text-blue-400 hover:text-blue-300'
                                 >
                                   🔗
                                 </a>
                               )}
                             </>
                           ) : (
-                            <span className='text-red-600'>❌</span>
+                            <span className='text-red-400'>❌</span>
                           )}
                         </div>
                       </div>
 
                       {/* WordPress Status */}
-                      <div className='flex items-center justify-between p-3 bg-gray-50 rounded-lg'>
+                      <div className='flex items-center justify-between p-3 bg-gray-800 rounded-lg border border-gray-600'>
                         <div className='flex items-center'>
-                          <span className='text-blue-600 mr-2'>📝</span>
-                          <span className='text-sm font-medium'>
+                          <span className='text-blue-400 mr-2'>📝</span>
+                          <span className='text-sm font-medium text-gray-300'>
                             WordPress:
                           </span>
                         </div>
                         <div className='flex items-center'>
                           {record.publishing_status.wordpress.published ? (
                             <>
-                              <span className='text-green-600 mr-2'>✅</span>
+                              <span className='text-green-400 mr-2'>✅</span>
                               {record.live_urls.wordpress && (
                                 <a
                                   href={record.live_urls.wordpress}
                                   target='_blank'
                                   rel='noopener noreferrer'
-                                  className='text-xs text-blue-600 hover:text-blue-800'
+                                  className='text-xs text-blue-400 hover:text-blue-300'
                                 >
                                   🔗
                                 </a>
                               )}
                             </>
                           ) : (
-                            <span className='text-red-600'>❌</span>
+                            <span className='text-red-400'>❌</span>
                           )}
                         </div>
                       </div>
@@ -789,13 +768,13 @@ const BlogHumanizerUI = () => {
 
                     {record.humanize_Data && (
                       <div className='mt-4'>
-                        <div className='bg-gray-50 p-4 rounded-lg'>
+                        <div className='bg-gray-800 p-4 rounded-lg border border-gray-600'>
                           <div className='flex items-center justify-between mb-2'>
-                            <span className='text-sm font-medium text-gray-700'>
+                            <span className='text-sm font-medium text-gray-300'>
                               Humanized Content Preview:
                             </span>
                           </div>
-                          <div className='text-sm text-gray-600 line-clamp-3'>
+                          <div className='text-sm text-gray-400 line-clamp-3'>
                             {record.humanize_Data.substring(0, 200)}...
                           </div>
                         </div>
