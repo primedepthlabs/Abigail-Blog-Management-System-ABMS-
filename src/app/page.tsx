@@ -7,8 +7,7 @@ import Humanizer from './components/Humanizer'; // This is actually the BlogTabl
 import Sidebar from './components/Sidebar';
 import RssManager from './components/RssManager';
 import { Sun, Moon } from 'lucide-react';
-import AnyBlog from './components/anyblog';
-import BlogHumanizerUI from './components/anyblog';
+import BlogHumanizerUI from './components/AnyBlog';
 
 export default function AppPage() {
   const [activeSection, setActiveSection] = useState('humanizer');
@@ -61,11 +60,10 @@ export default function AppPage() {
 
   return (
     <div
-      className={`flex h-screen w-full overflow-hidden transition-colors duration-300 ${
-        theme === 'dark'
+      className={`flex h-screen w-full overflow-hidden transition-colors duration-300 ${theme === 'dark'
           ? 'bg-gradient-to-tr from-gray-900 to-slate-800 text-gray-100'
           : 'bg-gradient-to-tr from-gray-100 to-slate-200 text-[#1e293b]'
-      }`}
+        }`}
     >
       {/* Sidebar */}
       <Sidebar
@@ -79,28 +77,26 @@ export default function AppPage() {
       <div className='flex flex-col flex-1 overflow-auto'>
         {/* Header with theme toggle */}
         <header
-          className={`sticky top-0 z-50 px-6 py-4 flex items-center justify-between transition-colors duration-300 ${
-            theme === 'dark'
+          className={`sticky top-0 z-50 px-6 py-4 flex items-center justify-between transition-colors duration-300 ${theme === 'dark'
               ? ' border-b border-gray-700'
               : 'bg-white/80 border-b border-gray-200'
-          } backdrop-blur-md`}
+            } backdrop-blur-md`}
         >
           <h1
-            className={`text-xl pl-10 font-semibold ${
-              theme === 'dark' ? 'text-white' : 'text-gray-800'
-            }`}
+            className={`text-xl pl-10 font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'
+              }`}
           >
             {activeSection === 'home'
               ? 'Dashboard'
               : activeSection === 'humanizer'
-              ? 'Blogs'
-              : activeSection === 'anyblog'
-              ? 'Blog Humanizer'
-              : activeSection === 'rss'
-              ? 'RSS Feeds'
-              : activeSection === 'notifications'
-              ? 'Notifications'
-              : 'Settings'}
+                ? 'Blogs'
+                : activeSection === 'anyblog'
+                  ? 'Blog Humanizer'
+                  : activeSection === 'rss'
+                    ? 'RSS Feeds'
+                    : activeSection === 'notifications'
+                      ? 'Notifications'
+                      : 'Settings'}
           </h1>
 
           <div className='flex items-center pr-10 gap-4'>
@@ -109,11 +105,10 @@ export default function AppPage() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={toggleTheme}
-              className={`p-2 rounded-full transition-colors duration-200 ${
-                theme === 'dark'
+              className={`p-2 rounded-full transition-colors duration-200 ${theme === 'dark'
                   ? 'bg-gray-800 text-blue-400 hover:bg-gray-700'
                   : 'bg-gray-100 text-blue-600 hover:bg-gray-200'
-              }`}
+                }`}
               aria-label={
                 theme === 'dark'
                   ? 'Switch to light mode'
@@ -124,11 +119,10 @@ export default function AppPage() {
             </motion.button>
 
             <div
-              className={`h-8 w-8 rounded-full ${
-                theme === 'dark'
+              className={`h-8 w-8 rounded-full ${theme === 'dark'
                   ? 'bg-gradient-to-br from-purple-600 to-blue-500'
                   : 'bg-gradient-to-br from-purple-600 to-blue-500'
-              } flex items-center justify-center text-white font-medium`}
+                } flex items-center justify-center text-white font-medium`}
             >
               U
             </div>
@@ -142,11 +136,10 @@ export default function AppPage() {
 
           {activeSection !== 'humanizer' && (
             <div
-              className={`rounded-2xl backdrop-blur-sm shadow-xl p-6 sm:p-8 min-h-[80vh] transition-colors duration-300 ${
-                theme === 'dark'
+              className={`rounded-2xl backdrop-blur-sm shadow-xl p-6 sm:p-8 min-h-[80vh] transition-colors duration-300 ${theme === 'dark'
                   ? 'bg-gray-800/70 shadow-lg shadow-black/20'
                   : 'bg-white/70 shadow-xl shadow-gray-200/50'
-              }`}
+                }`}
             >
               {activeSection === 'home' && (
                 <Home theme={theme} setTheme={setTheme} />
@@ -163,29 +156,25 @@ export default function AppPage() {
                 <div className='p-4'>
                   <h2 className='text-xl font-semibold mb-4'>Notifications</h2>
                   <div
-                    className={`p-4 rounded-lg mb-3 ${
-                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
-                    }`}
+                    className={`p-4 rounded-lg mb-3 ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                      }`}
                   >
                     <p className='font-medium'>System Update</p>
                     <p
-                      className={`text-sm ${
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                      }`}
+                      className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                        }`}
                     >
                       New features available in the Humanizer tool.
                     </p>
                   </div>
                   <div
-                    className={`p-4 rounded-lg mb-3 ${
-                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
-                    }`}
+                    className={`p-4 rounded-lg mb-3 ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                      }`}
                   >
                     <p className='font-medium'>Welcome!</p>
                     <p
-                      className={`text-sm ${
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                      }`}
+                      className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                        }`}
                     >
                       Thanks for trying AbiGail AI Assistant.
                     </p>
@@ -197,9 +186,8 @@ export default function AppPage() {
                 <div className='p-4'>
                   <h2 className='text-xl font-semibold mb-6'>Settings</h2>
                   <div
-                    className={`p-6 rounded-lg ${
-                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
-                    }`}
+                    className={`p-6 rounded-lg ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                      }`}
                   >
                     <h3 className='text-lg font-medium mb-4'>Appearance</h3>
                     <div className='flex items-center justify-between mb-6'>
@@ -210,13 +198,12 @@ export default function AppPage() {
                             setTheme('light');
                             localStorage.setItem('theme', 'light');
                           }}
-                          className={`px-3 py-1.5 rounded-lg text-sm ${
-                            theme === 'light'
+                          className={`px-3 py-1.5 rounded-lg text-sm ${theme === 'light'
                               ? 'bg-blue-500 text-white'
                               : theme === 'dark'
-                              ? 'bg-gray-600 text-gray-300'
-                              : 'bg-gray-200 text-gray-600'
-                          }`}
+                                ? 'bg-gray-600 text-gray-300'
+                                : 'bg-gray-200 text-gray-600'
+                            }`}
                         >
                           Light
                         </button>
@@ -225,13 +212,12 @@ export default function AppPage() {
                             setTheme('dark');
                             localStorage.setItem('theme', 'dark');
                           }}
-                          className={`px-3 py-1.5 rounded-lg text-sm ${
-                            theme === 'dark'
+                          className={`px-3 py-1.5 rounded-lg text-sm ${theme === 'dark'
                               ? 'bg-blue-500 text-white'
                               : theme === 'light'
-                              ? 'bg-gray-200 text-gray-600'
-                              : 'bg-gray-600 text-gray-300'
-                          }`}
+                                ? 'bg-gray-200 text-gray-600'
+                                : 'bg-gray-600 text-gray-300'
+                            }`}
                         >
                           Dark
                         </button>
@@ -243,13 +229,12 @@ export default function AppPage() {
                             ).matches;
                             setTheme(isDark ? 'dark' : 'light');
                           }}
-                          className={`px-3 py-1.5 rounded-lg text-sm ${
-                            localStorage.getItem('theme') === 'system'
+                          className={`px-3 py-1.5 rounded-lg text-sm ${localStorage.getItem('theme') === 'system'
                               ? 'bg-blue-500 text-white'
                               : theme === 'dark'
-                              ? 'bg-gray-600 text-gray-300'
-                              : 'bg-gray-200 text-gray-600'
-                          }`}
+                                ? 'bg-gray-600 text-gray-300'
+                                : 'bg-gray-200 text-gray-600'
+                            }`}
                         >
                           System
                         </button>
