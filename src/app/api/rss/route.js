@@ -788,7 +788,7 @@ const cheerio = require('cheerio');
 async function callOpenAIWithRetry(
   messages,
   maxTokens = 10000,
-  temperature = 0.7,
+  temperature = 0.2,
   maxRetries = 3,
 ) {
   let retries = 0;
@@ -806,8 +806,7 @@ async function callOpenAIWithRetry(
     } catch (error) {
       lastError = error;
       console.log(
-        `⚠️ OpenAI API error (attempt ${retries + 1}/${maxRetries}): ${
-          error.message
+        `⚠️ OpenAI API error (attempt ${retries + 1}/${maxRetries}): ${error.message
         }`,
       );
 
@@ -967,18 +966,18 @@ async function processItem(
     const rssItemId = rssItemData[0].id;
 
     // If no humanization needed, just return basic processing
-    if (!shouldHumanize) {
-      logger.info(`Skipping humanization for item ${index + 1}`);
-      return {
-        status: 'success',
-        rssItemId,
-        shopifySuccess: false,
-        wordpressSuccess: false,
-        shopifyArticleId: null,
-        wordpressPostId: null,
-        humanized: false,
-      };
-    }
+    // if (!shouldHumanize) {
+    //   logger.info(`Skipping humanization for item ${index + 1}`);
+    //   return {
+    //     status: 'success',
+    //     rssItemId,
+    //     shopifySuccess: false,
+    //     wordpressSuccess: false,
+    //     shopifyArticleId: null,
+    //     wordpressPostId: null,
+    //     humanized: false,
+    //   };
+    // }
 
     // 2. Fetch full HTML content from the blog URL
     logger.info(`Fetching full HTML from: ${item.link}`);
@@ -1368,12 +1367,12 @@ async function processItem(
     let allImages = [
       ...(item.media?.thumbnail
         ? [
-            {
-              url: item.media.thumbnail,
-              position: 'media:thumbnail',
-              priority: 2,
-            },
-          ]
+          {
+            url: item.media.thumbnail,
+            position: 'media:thumbnail',
+            priority: 2,
+          },
+        ]
         : []),
       ...(item.media?.content
         ? [{ url: item.media.content, position: 'media:content', priority: 2 }]
@@ -1472,10 +1471,19 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
     // 4. Use OpenAI to extract and enhance data with retry logic
     let enhancedBlogMarkdown = '';
     try {
+      const systemMessage = {
+        role: 'system',
+        content: `You are a professional technical blogger. Produce a polished, SEO-friendly blog post in Markdown. Guidelines:
+    - Use H1 for the title, H2 for main sections, H3 for subsections.
+    - Separate paragraphs with a blank line.
+    - Insert images in context; provide alt text and optional captions.
+    - Maintain an engaging, authoritative tone.
+    - Include an introduction, body with logical headings, and a concise conclusion.
+    - Do not include any HTML or raw JSON; only Markdown.`
+      };
       const aiRes = await callOpenAIWithRetry(
-        [{ role: 'user', content: prompt }],
-        10000,
-        0.7,
+        [systemMessage, { role: 'user', content: prompt }],
+        16000,
       );
       enhancedBlogMarkdown = aiRes.choices[0]?.message?.content || '';
       logger.info(
@@ -1498,9 +1506,8 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
       // Add first image if available
       if (blogData.images && blogData.images.length > 0) {
         const firstImage = blogData.images[0];
-        enhancedBlogMarkdown += `![${firstImage.alt || 'Image'}](${
-          firstImage.url
-        })\n\n`;
+        enhancedBlogMarkdown += `![${firstImage.alt || 'Image'}](${firstImage.url
+          })\n\n`;
       }
 
       // Add description/content
@@ -1523,65 +1530,65 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
     // 5. Humanize the generated blog with StealthGPT or OpenAI fallback
     let humanizedBlogMarkdown = enhancedBlogMarkdown;
 
-    try {
-      // First try with StealthGPT
-      logger.info(`Trying StealthGPT for item ${index + 1}`);
+    //     try {
+    //       // First try with StealthGPT
+    //       logger.info(`Trying StealthGPT for item ${index + 1}`);
 
-      const requestBody = {
-        prompt: enhancedBlogMarkdown,
-        rephrase: true,
-      };
+    //       const requestBody = {
+    //         prompt: enhancedBlogMarkdown,
+    //         rephrase: true,
+    //       };
 
-      const res = await fetch('https://stealthgpt.ai/api/stealthify', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.STEALTHGPT_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+    //       const res = await fetch('https://stealthgpt.ai/api/stealthify', {
+    //         method: 'POST',
+    //         headers: {
+    //           Authorization: `Bearer ${process.env.STEALTHGPT_API_KEY}`,
+    //           'Content-Type': 'application/json',
+    //         },
+    //         body: JSON.stringify(requestBody),
+    //       });
 
-      // If StealthGPT succeeds, use its result
-      if (res.ok) {
-        const result = await res.json();
-        const stealthText =
-          result.text || result.output || result.rephrased_text;
+    //       // If StealthGPT succeeds, use its result
+    //       if (res.ok) {
+    //         const result = await res.json();
+    //         const stealthText =
+    //           result.text || result.output || result.rephrased_text;
 
-        if (stealthText) {
-          logger.success(`StealthGPT succeeded for item ${index + 1}`);
-          humanizedBlogMarkdown = stealthText;
-        }
-      } else {
-        // If StealthGPT fails, use OpenAI as fallback with retry logic
-        logger.info(
-          `StealthGPT failed, falling back to OpenAI for item ${index + 1}`,
-        );
+    //         if (stealthText) {
+    //           logger.success(`StealthGPT succeeded for item ${index + 1}`);
+    //           humanizedBlogMarkdown = stealthText;
+    //         }
+    //       } else {
+    //         // If StealthGPT fails, use OpenAI as fallback with retry logic
+    //         logger.info(
+    //           `StealthGPT failed, falling back to OpenAI for item ${index + 1}`,
+    //         );
 
-        const fallbackPrompt = `
-Improve this blog post markdown to make it more engaging, conversational, and human-sounding while keeping the same structure and information:
+    //         const fallbackPrompt = `
+    // Improve this blog post markdown to make it more engaging, conversational, and human-sounding while keeping the same structure and information:
 
-${enhancedBlogMarkdown}
+    // ${enhancedBlogMarkdown}
 
-Only return the improved markdown, nothing else. Maintain all headings, images, and formatting.`;
+    // Only return the improved markdown, nothing else. Maintain all headings, images, and formatting.`;
 
-        try {
-          const fallbackRes = await callOpenAIWithRetry(
-            [{ role: 'user', content: fallbackPrompt }],
-            10000,
-            0.7,
-          );
-          humanizedBlogMarkdown =
-            fallbackRes.choices[0]?.message?.content || enhancedBlogMarkdown;
-          logger.success(`OpenAI fallback succeeded for item ${index + 1}`);
-        } catch (fallbackError) {
-          logger.error(`OpenAI fallback failed: ${fallbackError.message}`);
-          // Keep original enhanced blog markdown
-        }
-      }
-    } catch (err) {
-      logger.error(`Humanization error for item ${index + 1}:`, err.message);
-      // Keep the original enhanced blog markdown if humanization fails
-    }
+    //         try {
+    //           const fallbackRes = await callOpenAIWithRetry(
+    //             [{ role: 'user', content: fallbackPrompt }],
+    //             10000,
+    //             0.7,
+    //           );
+    //           humanizedBlogMarkdown =
+    //             fallbackRes.choices[0]?.message?.content || enhancedBlogMarkdown;
+    //           logger.success(`OpenAI fallback succeeded for item ${index + 1}`);
+    //         } catch (fallbackError) {
+    //           logger.error(`OpenAI fallback failed: ${fallbackError.message}`);
+    //           // Keep original enhanced blog markdown
+    //         }
+    //       }
+    //     } catch (err) {
+    //       logger.error(`Humanization error for item ${index + 1}:`, err.message);
+    //       // Keep the original enhanced blog markdown if humanization fails
+    //     }
 
     // 6. Insert the comprehensive markdown into Humanize_Data
     const { data: humanizeData, error: humanizeError } = await supabase
@@ -1703,10 +1710,9 @@ async function processFeedContent(feedData, feedId, selectedIndices = null) {
   };
 
   logger.info(
-    `Processing ${feedData.items.length} items from feed${
-      selectedIndices
-        ? ` (${selectedIndices.length} selected for humanization)`
-        : ' (all humanized)'
+    `Processing ${feedData.items.length} items from feed${selectedIndices
+      ? ` (${selectedIndices.length} selected for humanization)`
+      : ' (all humanized)'
     }`,
   );
 

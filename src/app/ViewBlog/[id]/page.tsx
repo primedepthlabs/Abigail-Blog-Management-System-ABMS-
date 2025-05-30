@@ -140,24 +140,21 @@ export default function ViewBlog() {
   // Add a wrapper div with the same background as the main app
   return (
     <div
-      className={`min-h-screen transition-colors duration-300 ${
-        theme === 'dark'
-          ? 'bg-gradient-to-tr from-gray-900 to-slate-800 text-gray-100'
-          : 'bg-gradient-to-tr from-gray-100 to-slate-200 text-[#1e293b]'
-      }`}
+      className={`min-h-screen transition-colors duration-300 ${theme === 'dark'
+        ? 'bg-gradient-to-tr from-gray-900 to-slate-800 text-gray-100'
+        : 'bg-gradient-to-tr from-gray-100 to-slate-200 text-[#1e293b]'
+        }`}
     >
       {/* Header with theme toggle */}
       <header
-        className={`sticky top-0 z-10 px-6 py-4 flex items-center justify-between transition-colors duration-300 ${
-          theme === 'dark'
-            ? 'bg-gray-900/80 border-b border-gray-700'
-            : 'bg-white/80 border-b border-gray-200'
-        } backdrop-blur-md`}
+        className={`sticky top-0 z-10 px-6 py-4 flex items-center justify-between transition-colors duration-300 ${theme === 'dark'
+          ? 'bg-gray-900/80 border-b border-gray-700'
+          : 'bg-white/80 border-b border-gray-200'
+          } backdrop-blur-md`}
       >
         <h1
-          className={`text-xl font-semibold ${
-            theme === 'dark' ? 'text-white' : 'text-gray-800'
-          }`}
+          className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'
+            }`}
         >
           Blog Details
         </h1>
@@ -168,11 +165,10 @@ export default function ViewBlog() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={toggleTheme}
-            className={`p-2 rounded-full transition-colors duration-200 ${
-              theme === 'dark'
-                ? 'bg-gray-800 text-blue-400 hover:bg-gray-700'
-                : 'bg-gray-100 text-blue-600 hover:bg-gray-200'
-            }`}
+            className={`p-2 rounded-full transition-colors duration-200 ${theme === 'dark'
+              ? 'bg-gray-800 text-blue-400 hover:bg-gray-700'
+              : 'bg-gray-100 text-blue-600 hover:bg-gray-200'
+              }`}
             aria-label={
               theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
             }
@@ -181,11 +177,10 @@ export default function ViewBlog() {
           </motion.button>
 
           <div
-            className={`h-8 w-8 rounded-full ${
-              theme === 'dark'
-                ? 'bg-gradient-to-br from-purple-600 to-blue-500'
-                : 'bg-gradient-to-br from-purple-600 to-blue-500'
-            } flex items-center justify-center text-white font-medium`}
+            className={`h-8 w-8 rounded-full ${theme === 'dark'
+              ? 'bg-gradient-to-br from-purple-600 to-blue-500'
+              : 'bg-gradient-to-br from-purple-600 to-blue-500'
+              } flex items-center justify-center text-white font-medium`}
           >
             U
           </div>
@@ -195,59 +190,51 @@ export default function ViewBlog() {
       {/* Main content */}
       {loading ? (
         <div
-          className={`flex justify-center items-center h-64 ${
-            theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-          }`}
+          className={`flex justify-center items-center h-64 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+            }`}
         >
           <div className='animate-pulse flex flex-col items-center'>
             <div
-              className={`h-8 w-40 rounded-md mb-4 ${
-                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-              }`}
+              className={`h-8 w-40 rounded-md mb-4 ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                }`}
             ></div>
             <div
-              className={`h-4 w-64 rounded-md ${
-                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-              }`}
+              className={`h-4 w-64 rounded-md ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                }`}
             ></div>
           </div>
         </div>
       ) : error || !blog ? (
         <div
-          className={`max-w-4xl mx-auto p-4 sm:p-6 md:p-10 ${
-            theme === 'dark' ? 'text-gray-200' : 'text-gray-800'
-          }`}
+          className={`max-w-4xl mx-auto p-4 sm:p-6 md:p-10 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'
+            }`}
         >
           <button
             onClick={() => router.back()}
-            className={`mb-6 inline-flex items-center gap-1 text-sm transition ${
-              theme === 'dark'
-                ? 'text-gray-400 hover:text-gray-200'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
+            className={`mb-6 inline-flex items-center gap-1 text-sm transition ${theme === 'dark'
+              ? 'text-gray-400 hover:text-gray-200'
+              : 'text-gray-600 hover:text-gray-800'
+              }`}
           >
             <ArrowLeft size={16} /> Back to Blogs
           </button>
 
           <div
-            className={`${
-              theme === 'dark'
-                ? 'bg-gray-800 border border-gray-700'
-                : 'bg-white'
-            } shadow-xl rounded-2xl p-6 sm:p-10 flex justify-center items-center min-h-[200px]`}
+            className={`${theme === 'dark'
+              ? 'bg-gray-800 border border-gray-700'
+              : 'bg-white'
+              } shadow-xl rounded-2xl p-6 sm:p-10 flex justify-center items-center min-h-[200px]`}
           >
             <div className='text-center'>
               <p
-                className={`${
-                  theme === 'dark' ? 'text-red-400' : 'text-red-500'
-                } font-medium mb-2`}
+                className={`${theme === 'dark' ? 'text-red-400' : 'text-red-500'
+                  } font-medium mb-2`}
               >
                 {error || 'Blog data not found'}
               </p>
               <p
-                className={`text-sm ${
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                }`}
+                className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                  }`}
               >
                 The blog you're looking for couldn't be loaded. Please try again
                 or return to the blogs page.
@@ -257,35 +244,31 @@ export default function ViewBlog() {
         </div>
       ) : (
         <section
-          className={`max-w-4xl mx-auto p-4 sm:p-6 md:p-10 ${
-            theme === 'dark' ? 'text-gray-200' : 'text-gray-800'
-          }`}
+          className={`max-w-4xl mx-auto p-4 sm:p-6 md:p-10 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'
+            }`}
         >
           <button
             onClick={() => router.back()}
-            className={`mb-6 inline-flex items-center gap-1 text-sm transition ${
-              theme === 'dark'
-                ? 'text-gray-400 hover:text-gray-200'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
+            className={`mb-6 inline-flex items-center gap-1 text-sm transition ${theme === 'dark'
+              ? 'text-gray-400 hover:text-gray-200'
+              : 'text-gray-600 hover:text-gray-800'
+              }`}
           >
             <ArrowLeft size={16} /> Back to Blogs
           </button>
 
           <article
-            className={`${
-              theme === 'dark'
-                ? 'bg-gray-800 border border-gray-700'
-                : 'bg-white'
-            } shadow-xl rounded-2xl p-6 sm:p-10`}
+            className={`${theme === 'dark'
+              ? 'bg-gray-800 border border-gray-700'
+              : 'bg-white'
+              } shadow-xl rounded-2xl p-6 sm:p-10`}
           >
             <div className='mb-6'>
               <div
-                className={`inline-block px-3 py-1 rounded-full text-sm font-medium mb-2 ${
-                  theme === 'dark'
-                    ? 'bg-violet-900/40 text-violet-300'
-                    : 'bg-violet-100 text-violet-700'
-                }`}
+                className={`inline-block px-3 py-1 rounded-full text-sm font-medium mb-2 ${theme === 'dark'
+                  ? 'bg-violet-900/40 text-violet-300'
+                  : 'bg-violet-100 text-violet-700'
+                  }`}
               >
                 Blog #{blog.rss_feed_data_column}
               </div>
@@ -293,107 +276,10 @@ export default function ViewBlog() {
 
             {/* Render the complete markdown content using ReactMarkdown */}
             <div
-              className={`markdown-content ${
-                theme === 'dark' ? 'markdown-dark' : 'markdown-light'
-              }`}
+              className={`markdown-content ${theme === 'dark' ? 'markdown-dark' : 'markdown-light'
+                }`}
             >
               <ReactMarkdown
-                components={{
-                  // Override components to apply theme-specific styling
-                  h1: ({ node, ...props }) => (
-                    <h1
-                      className={`text-2xl font-bold mb-4 ${
-                        theme === 'dark' ? 'text-white' : 'text-gray-800'
-                      }`}
-                      {...props}
-                    />
-                  ),
-                  h2: ({ node, ...props }) => (
-                    <h2
-                      className={`text-xl font-semibold mt-6 mb-3 ${
-                        theme === 'dark' ? 'text-white' : 'text-gray-800'
-                      }`}
-                      {...props}
-                    />
-                  ),
-                  h3: ({ node, ...props }) => (
-                    <h3
-                      className={`text-lg font-semibold mt-5 mb-2 ${
-                        theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
-                      }`}
-                      {...props}
-                    />
-                  ),
-                  p: ({ node, ...props }) => (
-                    <p
-                      className={`mb-4 ${
-                        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                      }`}
-                      {...props}
-                    />
-                  ),
-                  a: ({ node, ...props }) => (
-                    <a
-                      className={`${
-                        theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-                      } hover:underline`}
-                      {...props}
-                    />
-                  ),
-                  ul: ({ node, ...props }) => (
-                    <ul className='list-disc pl-6 mb-4' {...props} />
-                  ),
-                  ol: ({ node, ...props }) => (
-                    <ol className='list-decimal pl-6 mb-4' {...props} />
-                  ),
-                  li: ({ node, ...props }) => (
-                    <li className='mb-1' {...props} />
-                  ),
-                  img: ({ node, ...props }) => (
-                    <div className='my-6'>
-                      <img
-                        className='rounded-lg max-w-full h-auto'
-                        {...props}
-                        alt={props.alt || 'Blog image'}
-                      />
-                      {props.alt && (
-                        <span
-                          className={`block mt-2 text-sm italic ${
-                            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                          }`}
-                        >
-                          {props.alt}
-                        </span>
-                      )}
-                    </div>
-                  ),
-                  blockquote: ({ node, ...props }) => (
-                    <blockquote
-                      className={`border-l-4 pl-4 py-1 my-4 ${
-                        theme === 'dark'
-                          ? 'border-gray-600 text-gray-400'
-                          : 'border-gray-300 text-gray-600'
-                      }`}
-                      {...props}
-                    />
-                  ),
-                  code: ({ node, inline, ...props }) =>
-                    inline ? (
-                      <code
-                        className={`px-1 py-0.5 rounded ${
-                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                        }`}
-                        {...props}
-                      />
-                    ) : (
-                      <code
-                        className={`block p-3 rounded-md my-4 overflow-x-auto ${
-                          theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'
-                        }`}
-                        {...props}
-                      />
-                    ),
-                }}
               >
                 {blog.humanize_Data}
               </ReactMarkdown>
@@ -430,8 +316,8 @@ export default function ViewBlog() {
           height: 1px;
           margin: 2rem 0;
           background-color: ${theme === 'dark'
-            ? 'rgba(255,255,255,0.1)'
-            : 'rgba(0,0,0,0.1)'};
+          ? 'rgba(255,255,255,0.1)'
+          : 'rgba(0,0,0,0.1)'};
         }
 
         .markdown-content table {
@@ -449,8 +335,8 @@ export default function ViewBlog() {
 
         .markdown-content th {
           background-color: ${theme === 'dark'
-            ? 'rgba(255,255,255,0.05)'
-            : 'rgba(0,0,0,0.05)'};
+          ? 'rgba(255,255,255,0.05)'
+          : 'rgba(0,0,0,0.05)'};
         }
       `}</style>
     </div>

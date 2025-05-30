@@ -41,7 +41,7 @@ const logger = {
 async function callOpenAIWithRetry(
   messages,
   maxTokens = 10000,
-  temperature = 0.7,
+  temperature = 0.2,
   maxRetries = 3,
 ) {
   let retries = 0;
@@ -59,8 +59,7 @@ async function callOpenAIWithRetry(
     } catch (error) {
       lastError = error;
       console.log(
-        `⚠️ OpenAI API error (attempt ${retries + 1}/${maxRetries}): ${
-          error.message
+        `⚠️ OpenAI API error (attempt ${retries + 1}/${maxRetries}): ${error.message
         }`,
       );
       const waitTime = Math.pow(2, retries) * 1000;
@@ -131,7 +130,6 @@ async function getBlogId() {
   }
 }
 
-// UPDATED: Shopify function with full content (no truncation)
 async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
   try {
     const blogId = await getBlogId();
@@ -221,7 +219,7 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
   }
 }
 
-// UPDATED: WordPress function with full content (no truncation)
+// WORDPRESS FUNCTION
 async function createWordPressBlogPost(humanizedMarkdown, blogData = {}) {
   try {
     const title = extractTitle(humanizedMarkdown);
@@ -342,8 +340,7 @@ async function fetchBlogContent(blogUrl) {
 
       if (status === 403) {
         throw new Error(
-          `Access denied (403). The website "${
-            new URL(blogUrl).hostname
+          `Access denied (403). The website "${new URL(blogUrl).hostname
           }" is blocking automated requests. Please try a different URL or contact the site owner.`,
         );
       } else if (status === 404) {
@@ -361,8 +358,7 @@ async function fetchBlogContent(blogUrl) {
       }
     } else if (error.code === 'ECONNABORTED') {
       throw new Error(
-        `Request timeout. The website "${
-          new URL(blogUrl).hostname
+        `Request timeout. The website "${new URL(blogUrl).hostname
         }" took too long to respond.`,
       );
     } else if (error.code === 'ENOTFOUND') {
@@ -524,9 +520,8 @@ function distributeImagesInContent(contentText, images) {
 
   if (paragraphs.length <= 2) {
     // If very short content, just add first image at the beginning
-    return `![${images[0].alt || 'Featured Image'}](${
-      images[0].url
-    })\n\n${contentText}`;
+    return `![${images[0].alt || 'Featured Image'}](${images[0].url
+      })\n\n${contentText}`;
   }
 
   let result = '';
@@ -554,9 +549,8 @@ function distributeImagesInContent(contentText, images) {
     // Check if we should insert an image after this paragraph
     if (imageIndex < images.length && imageDistributionPoints.includes(i)) {
       const image = images[imageIndex];
-      result += `![${image.alt || `Image ${imageIndex + 1}`}](${image.url}${
-        image.caption ? ` "${image.caption}"` : ''
-      })\n\n`;
+      result += `![${image.alt || `Image ${imageIndex + 1}`}](${image.url}${image.caption ? ` "${image.caption}"` : ''
+        })\n\n`;
       imageIndex++;
     }
   }
@@ -564,9 +558,8 @@ function distributeImagesInContent(contentText, images) {
   // Add any remaining images at the end if not all were distributed
   while (imageIndex < images.length) {
     const image = images[imageIndex];
-    result += `![${image.alt || `Image ${imageIndex + 1}`}](${image.url}${
-      image.caption ? ` "${image.caption}"` : ''
-    })\n\n`;
+    result += `![${image.alt || `Image ${imageIndex + 1}`}](${image.url}${image.caption ? ` "${image.caption}"` : ''
+      })\n\n`;
     imageIndex++;
   }
 
@@ -692,18 +685,16 @@ Title: ${blogData.title}
 Source: ${blogData.source_domain}
 Full Content: ${blogData.description_text}
 
-${
-  blogData.images.length > 0
-    ? `
+${blogData.images.length > 0
+        ? `
 IMAGES AVAILABLE (${blogData.images.length} total):
 ${blogData.images
-  .map(
-    (img, index) =>
-      `${index + 1}. ![${img.alt || `Image ${index + 1}`}](${img.url}${
-        img.caption ? ` "${img.caption}"` : ''
-      })`,
-  )
-  .join('\n')}
+          .map(
+            (img, index) =>
+              `${index + 1}. ![${img.alt || `Image ${index + 1}`}](${img.url}${img.caption ? ` "${img.caption}"` : ''
+              })`,
+          )
+          .join('\n')}
 
 CRITICAL IMAGE PLACEMENT INSTRUCTIONS:
 - Place images strategically throughout the blog post where they are most contextually relevant
@@ -713,28 +704,24 @@ CRITICAL IMAGE PLACEMENT INSTRUCTIONS:
 - Use images to break up long text sections and enhance readability
 - Match images to the content they best illustrate (e.g., if discussing a product, place the product image there)
 - Distribute images evenly throughout the post for better visual flow
-
-
 `
-    : ''
-}
+        : ''
+      }
 
 INSTRUCTIONS:
 1. Create a complete, comprehensive blog post in markdown format using ALL the provided content
 2. Include a compelling title that captures attention (H1 format)
-3. ${
-      blogData.images.length > 0
+3. ${blogData.images.length > 0
         ? 'IMPORTANT: Distribute the provided images naturally throughout the content where they fit contextually - NOT at the end of the post'
         : 'Create engaging content based on the full content provided'
-    }
+      }
 4. Organize with appropriate headings (H2, H3) for better readability
 5. Maintain the full depth and detail of the original content
 6. Include a brief conclusion that wraps up all the points discussed
-${
-  blogData.images.length > 0
-    ? '8. Use proper markdown image syntax: ![alt text](image_url "optional title")'
-    : ''
-}
+${blogData.images.length > 0
+        ? '8. Use proper markdown image syntax: ![alt text](image_url "optional title")'
+        : ''
+      }
 
 CONTENT STRUCTURE EXAMPLE:
 # [Engaging Title]
@@ -762,16 +749,26 @@ IMPORTANT:
 - Place images where they make the most sense contextually within the content flow
 - DO NOT create an "Additional Images" section at the end
 - Images should enhance and complement the text they appear near
--Create the Blog text properly formatted in blog style
+- Create the Blog text properly formatted in blog style with proper PRAPHRAPHS and lines
+- Remove all the link sources
 
 Return ONLY the complete markdown blog content with images with proper blog format, properly distributed throughout, ready to display as-is.  `;
 
     let enhancedBlogMarkdown = '';
     try {
+      const systemMessage = {
+        role: 'system',
+        content: `You are a professional technical blogger. Produce a polished, SEO-friendly blog post in Markdown. Guidelines:
+    - Use H1 for the title, H2 for main sections, H3 for subsections.
+    - Separate paragraphs with a blank line.
+    - Insert images in context; provide alt text and optional captions.
+    - Maintain an engaging, authoritative tone.
+    - Include an introduction, body with logical headings, and a concise conclusion.
+    - Do not include any HTML or raw JSON; only Markdown.`
+      };
       const aiRes = await callOpenAIWithRetry(
-        [{ role: 'user', content: prompt }],
+        [systemMessage, { role: 'user', content: prompt }],
         16000, // Increased token limit for full content
-        0.7,
       );
       enhancedBlogMarkdown = aiRes.choices[0]?.message?.content || '';
       logger.info(
@@ -795,35 +792,35 @@ Return ONLY the complete markdown blog content with images with proper blog form
     // 6. Humanize with StealthGPT
     let humanizedBlogMarkdown = enhancedBlogMarkdown;
 
-    try {
-      const requestBody = {
-        prompt: enhancedBlogMarkdown,
-        rephrase: true,
-      };
+    // try {
+    //   const requestBody = {
+    //     prompt: enhancedBlogMarkdown,
+    //     rephrase: true,
+    //   };
 
-      const res = await fetch('https://stealthgpt.ai/api/stealthify', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.STEALTHGPT_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+    //   const res = await fetch('https://stealthgpt.ai/api/stealthify', {
+    //     method: 'POST',
+    //     headers: {
+    //       Authorization: `Bearer ${process.env.STEALTHGPT_API_KEY}`,
+    //       'Content-Type': 'application/json',
+    //     },
+    //     body: JSON.stringify(requestBody),
+    //   });
 
-      if (res.ok) {
-        const result = await res.json();
-        const stealthText =
-          result.text || result.output || result.rephrased_text;
-        if (stealthText) {
-          humanizedBlogMarkdown = stealthText;
-          logger.success('StealthGPT humanization successful');
-        }
-      } else {
-        logger.info('StealthGPT failed, using OpenAI content as-is');
-      }
-    } catch (err) {
-      logger.error('Humanization error:', err.message);
-    }
+    //   if (res.ok) {
+    //     const result = await res.json();
+    //     const stealthText =
+    //       result.text || result.output || result.rephrased_text;
+    //     if (stealthText) {
+    //       humanizedBlogMarkdown = stealthText;
+    //       logger.success('StealthGPT humanization successful');
+    //     }
+    //   } else {
+    //     logger.info('StealthGPT failed, using OpenAI content as-is');
+    //   }
+    // } catch (err) {
+    //   logger.error('Humanization error:', err.message);
+    // }
 
     // 7. Save to database
     const { data: humanizeData, error: humanizeError } = await supabase

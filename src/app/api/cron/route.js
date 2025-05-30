@@ -756,7 +756,18 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
     // 4. Use OpenAI to extract and enhance data
     let enhancedBlogMarkdown = '';
     try {
-      const aiRes = await callOpenAIWithRetry([{ role: 'user', content: prompt }], 10000, 0.7);
+
+      const systemMessage = {
+        role: 'system',
+        content: `You are a professional technical blogger. Produce a polished, SEO-friendly blog post in Markdown. Guidelines:
+    - Use H1 for the title, H2 for main sections, H3 for subsections.
+    - Separate paragraphs with a blank line.
+    - Insert images in context; provide alt text and optional captions.
+    - Maintain an engaging, authoritative tone.
+    - Include an introduction, body with logical headings, and a concise conclusion.
+    - Do not include any HTML or raw JSON; only Markdown.`
+      };
+      const aiRes = await callOpenAIWithRetry([systemMessage, { role: 'user', content: prompt }], 16000, 0.2);
       enhancedBlogMarkdown = aiRes.choices[0]?.message?.content || '';
       console.log(`🤖 OpenAI blog creation: ${enhancedBlogMarkdown.substring(0, 100)}...`);
     } catch (openAiError) {
