@@ -4,27 +4,28 @@ import { JSDOM } from 'jsdom';
 import axios from 'axios';
 import cheerio from 'cheerio';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Initialize DeepSeek API client
+const deepseek = new OpenAI({
+  apiKey: 'sk-7cea9a49d17642c193d15edb2ebd659e',
+  baseURL: 'https://api.deepseek.com/v1'
 });
 
-// Helper function for OpenAI API with retry logic
-async function callOpenAIWithRetry(messages, maxTokens = 10000, temperature = 0.7, maxRetries = 3) {
+// Helper function for DeepSeek API with retry logic
+async function callDeepSeekWithRetry(messages, maxTokens = 10000, temperature = 0.7, maxRetries = 3) {
   let retries = 0;
   let lastError = null;
 
   while (retries < maxRetries) {
     try {
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
+      const response = await deepseek.chat.completions.create({
+        model: 'deepseek-chat',
         messages: messages,
-        max_tokens: maxTokens,
         temperature: temperature,
       });
       return response;
     } catch (error) {
       lastError = error;
-      console.log(`⚠️ OpenAI API error (attempt ${retries + 1}/${maxRetries}): ${error.message}`);
+      console.log(`⚠️ DeepSeek API error (attempt ${retries + 1}/${maxRetries}): ${error.message}`);
 
       // Wait before retrying (exponential backoff)
       const waitTime = Math.pow(2, retries) * 1000; // 1s, 2s, 4s
@@ -34,7 +35,7 @@ async function callOpenAIWithRetry(messages, maxTokens = 10000, temperature = 0.
   }
 
   // If we got here, all retries failed
-  throw new Error(`OpenAI API failed after ${maxRetries} attempts. Last error: ${lastError.message}`);
+  throw new Error(`DeepSeek API failed after ${maxRetries} attempts. Last error: ${lastError.message}`);
 }
 
 // Custom function to extract text from HTML
@@ -659,7 +660,7 @@ async function processItem(item, feedId, existingUrls) {
       console.error(`⚠️ Error fetching HTML from ${item.link}:`, fetchError.message);
     }
 
-    // 3. Prepare item data for OpenAI extraction
+    // 3. Prepare item data for DeepSeek extraction
     const description = item.description || '';
     const content = item.content || '';
 
@@ -751,12 +752,11 @@ INSTRUCTIONS:
 
 IMPORTANT: Your output must be in perfect markdown format, ready to be displayed as a professional blog post. Focus on delivering valuable content without any website cruft or unnecessary elements.
 
-Return ONLY the markdown blog content, with no extra commentary. It should be ready to display as-is. don't show "markdown" in the starting just show the tile as # title`;
+Return ONLY the markdown blog content, with no extra commentary. It should be ready to display as-is. Don't show "markdown" in the starting just show the title as # title`;
 
-    // 4. Use OpenAI to extract and enhance data
+    // 4. Use DeepSeek to extract and enhance data
     let enhancedBlogMarkdown = '';
     try {
-
       const systemMessage = {
         role: 'system',
         content: `You are a professional technical blogger. Produce a polished, SEO-friendly blog post in Markdown. Guidelines:
@@ -767,11 +767,12 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
     - Include an introduction, body with logical headings, and a concise conclusion.
     - Do not include any HTML or raw JSON; only Markdown.`
       };
-      const aiRes = await callOpenAIWithRetry([systemMessage, { role: 'user', content: prompt }], 16000, 0.2);
+
+      const aiRes = await callDeepSeekWithRetry([systemMessage, { role: 'user', content: prompt }], 16000, 0.2);
       enhancedBlogMarkdown = aiRes.choices[0]?.message?.content || '';
-      console.log(`🤖 OpenAI blog creation: ${enhancedBlogMarkdown.substring(0, 100)}...`);
-    } catch (openAiError) {
-      console.error(`❌ Failed to create blog with OpenAI:`, openAiError.message);
+      console.log(`🤖 DeepSeek blog creation: ${enhancedBlogMarkdown.substring(0, 100)}...`);
+    } catch (deepSeekError) {
+      console.error(`❌ Failed to create blog with DeepSeek:`, deepSeekError.message);
 
       // Fallback to basic markdown
       enhancedBlogMarkdown = `# ${blogData.title}\n\n`;
@@ -797,54 +798,26 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
       }
     }
 
-    // 5. Humanize the generated blog
+    // 5. Humanize the generated blog using DeepSeek
     let humanizedBlogMarkdown = enhancedBlogMarkdown;
 
     try {
-      console.log(`🔄 Trying StealthGPT for humanization`);
+      console.log(`🔄 Trying DeepSeek for humanization`);
 
-      const requestBody = {
-        prompt: enhancedBlogMarkdown,
-        rephrase: true,
-      };
-
-      const res = await fetch('https://stealthgpt.ai/api/stealthify', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.STEALTHGPT_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (res.ok) {
-        const result = await res.json();
-        const stealthText = result.text || result.output || result.rephrased_text;
-
-        if (stealthText) {
-          console.log(`✅ StealthGPT succeeded`);
-          humanizedBlogMarkdown = stealthText;
-        }
-      } else {
-        console.log(`⚠️ StealthGPT failed, falling back to OpenAI`);
-
-        const fallbackPrompt = `
+      const humanizePrompt = `
 Improve this blog post markdown to make it more engaging, conversational, and human-sounding while keeping the same structure and information:
 
 ${enhancedBlogMarkdown}
 
-Only return the improved markdown, nothing else. Maintain all headings, images, and formatting.`;
+Make it sound more natural and less AI-generated. Use varied sentence structures, add personality, and make it flow better while maintaining all the technical accuracy and information. Only return the improved markdown, nothing else.`;
 
-        try {
-          const fallbackRes = await callOpenAIWithRetry([{ role: 'user', content: fallbackPrompt }], 10000, 0.7);
-          humanizedBlogMarkdown = fallbackRes.choices[0]?.message?.content || enhancedBlogMarkdown;
-          console.log(`✅ OpenAI fallback succeeded`);
-        } catch (fallbackError) {
-          console.error(`❌ OpenAI fallback failed: ${fallbackError.message}`);
-        }
-      }
-    } catch (err) {
-      console.error(`❌ Humanization error:`, err.message);
+      const humanizeRes = await callDeepSeekWithRetry([{ role: 'user', content: humanizePrompt }], 10000, 0.7);
+      humanizedBlogMarkdown = humanizeRes.choices[0]?.message?.content || enhancedBlogMarkdown;
+      console.log(`✅ DeepSeek humanization succeeded`);
+    } catch (humanizeError) {
+      console.error(`❌ DeepSeek humanization failed: ${humanizeError.message}`);
+      // Fall back to the original enhanced markdown
+      humanizedBlogMarkdown = enhancedBlogMarkdown;
     }
 
     // 6. Insert the comprehensive markdown into Humanize_Data
@@ -883,7 +856,7 @@ export async function GET(req) {
     //   });
     // }
 
-    console.log('🚀 Starting RSS feed cron job');
+    console.log('🚀 Starting RSS feed cron job with DeepSeek API');
 
     // 1. Fetch all RSS feeds from the database
     const { data: rssFeeds, error: feedsError } = await supabase
@@ -991,7 +964,7 @@ export async function GET(req) {
       });
     }
 
-    console.log(`🎯 Processing ${itemsToProcess.length} new items in parallel`);
+    console.log(`🎯 Processing ${itemsToProcess.length} new items in parallel with DeepSeek`);
 
     // 5. Process all new items in parallel
     const processingPromises = itemsToProcess.map(({ item, feedId }) =>
@@ -1006,10 +979,11 @@ export async function GET(req) {
       totalNewItems: itemsToProcess.length,
       processed: results.filter(r => r.status === 'success').length,
       errors: results.filter(r => r.status === 'error').length,
-      skipped: results.filter(r => r.status === 'skipped').length
+      skipped: results.filter(r => r.status === 'skipped').length,
+      aiProvider: 'DeepSeek'
     };
 
-    console.log('📊 Cron job completed:', stats);
+    console.log('📊 Cron job completed with DeepSeek:', stats);
 
     return new Response(JSON.stringify({
       success: true,

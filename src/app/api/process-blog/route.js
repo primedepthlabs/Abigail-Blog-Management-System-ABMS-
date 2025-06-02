@@ -5,8 +5,10 @@ import supabase from '@/lib/supabaseClient';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Initialize DeepSeek API client
+const deepseek = new OpenAI({
+  apiKey: 'sk-7cea9a49d17642c193d15edb2ebd659e',
+  baseURL: 'https://api.deepseek.com/v1'
 });
 
 // SHOPIFY CONFIGURATION
@@ -16,7 +18,7 @@ const SHOPIFY_SHOP_DOMAIN = process.env.SHOPIFY_SHOP_DOMAIN;
 // WORDPRESS CONFIGURATION
 const WP_URL = process.env.Administrative_URL;
 const WP_USER = process.env.Admin_Username;
-const WP_PASS = process.env.Admin_Password;
+const WP_PASS = 'FAO9 ugz8 frso pmP3 WRlV 4oAE';
 const WP_AUTH = Buffer.from(`${WP_USER}:${WP_PASS}`).toString('base64');
 
 const logger = {
@@ -37,8 +39,8 @@ const logger = {
   },
 };
 
-// Helper function for OpenAI API with retry logic
-async function callOpenAIWithRetry(
+// Helper function for DeepSeek API with retry logic
+async function callDeepSeekWithRetry(
   messages,
   maxTokens = 10000,
   temperature = 0.2,
@@ -49,17 +51,16 @@ async function callOpenAIWithRetry(
 
   while (retries < maxRetries) {
     try {
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
+      const response = await deepseek.chat.completions.create({
+        model: 'deepseek-chat',
         messages: messages,
-        max_tokens: maxTokens,
         temperature: temperature,
       });
       return response;
     } catch (error) {
       lastError = error;
       console.log(
-        `⚠️ OpenAI API error (attempt ${retries + 1}/${maxRetries}): ${error.message
+        `⚠️ DeepSeek API error (attempt ${retries + 1}/${maxRetries}): ${error.message
         }`,
       );
       const waitTime = Math.pow(2, retries) * 1000;
@@ -68,7 +69,7 @@ async function callOpenAIWithRetry(
     }
   }
   throw new Error(
-    `OpenAI API failed after ${maxRetries} attempts. Last error: ${lastError.message}`,
+    `DeepSeek API failed after ${maxRetries} attempts. Last error: ${lastError.message}`,
   );
 }
 
@@ -270,7 +271,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}) {
     });
 
     const wpData = await wpRes.json();
-
+    console.log({ wpData })
     if (!wpRes.ok) {
       logger.error('WordPress API error:', {
         status: wpRes.status,
@@ -569,7 +570,7 @@ function distributeImagesInContent(contentText, images) {
 // Main processing function with improved image placement
 async function processSingleBlog(blogUrl) {
   try {
-    logger.info(`Processing single blog URL: ${blogUrl}`);
+    logger.info(`Processing single blog URL with DeepSeek: ${blogUrl}`);
 
     // 1. Create a pseudo-feed entry for single blog processing
     const { data: feedData, error: feedError } = await supabase
@@ -676,7 +677,7 @@ async function processSingleBlog(blogUrl) {
       source_domain: new URL(blogUrl).hostname,
     };
 
-    // 5. Use OpenAI to enhance content with better image distribution
+    // 5. Use DeepSeek to enhance content with better image distribution
     const prompt = `
 You are a professional blog content creator. Create a comprehensive, engaging formatted blog post based on this information:
 
@@ -749,10 +750,10 @@ IMPORTANT:
 - Place images where they make the most sense contextually within the content flow
 - DO NOT create an "Additional Images" section at the end
 - Images should enhance and complement the text they appear near
-- Create the Blog text properly formatted in blog style with proper PRAPHRAPHS and lines
+- Create the Blog text properly formatted in blog style with proper PARAGRAPHS and lines
 - Remove all the link sources
 
-Return ONLY the complete markdown blog content with images with proper blog format, properly distributed throughout, ready to display as-is.  `;
+Return ONLY the complete markdown blog content with images with proper blog format, properly distributed throughout, ready to display as-is.`;
 
     let enhancedBlogMarkdown = '';
     try {
@@ -766,16 +767,16 @@ Return ONLY the complete markdown blog content with images with proper blog form
     - Include an introduction, body with logical headings, and a concise conclusion.
     - Do not include any HTML or raw JSON; only Markdown.`
       };
-      const aiRes = await callOpenAIWithRetry(
+      const aiRes = await callDeepSeekWithRetry(
         [systemMessage, { role: 'user', content: prompt }],
         16000, // Increased token limit for full content
       );
       enhancedBlogMarkdown = aiRes.choices[0]?.message?.content || '';
       logger.info(
-        'OpenAI successfully created complete blog content with distributed images',
+        'DeepSeek successfully created complete blog content with distributed images',
       );
-    } catch (openAiError) {
-      logger.error('OpenAI failed:', openAiError.message);
+    } catch (deepSeekError) {
+      logger.error('DeepSeek failed:', deepSeekError.message);
 
       // Improved fallback content with better image distribution
       enhancedBlogMarkdown = `# ${blogData.title}\n\n`;
@@ -789,38 +790,27 @@ Return ONLY the complete markdown blog content with images with proper blog form
       enhancedBlogMarkdown += contentWithImages;
     }
 
-    // 6. Humanize with StealthGPT
+    // 6. Humanize with DeepSeek
     let humanizedBlogMarkdown = enhancedBlogMarkdown;
 
-    // try {
-    //   const requestBody = {
-    //     prompt: enhancedBlogMarkdown,
-    //     rephrase: true,
-    //   };
+    try {
+      logger.info('Using DeepSeek for humanization');
 
-    //   const res = await fetch('https://stealthgpt.ai/api/stealthify', {
-    //     method: 'POST',
-    //     headers: {
-    //       Authorization: `Bearer ${process.env.STEALTHGPT_API_KEY}`,
-    //       'Content-Type': 'application/json',
-    //     },
-    //     body: JSON.stringify(requestBody),
-    //   });
+      const humanizePrompt = `
+Improve this blog post markdown to make it more engaging, conversational, and human-sounding while keeping the same structure and information:
 
-    //   if (res.ok) {
-    //     const result = await res.json();
-    //     const stealthText =
-    //       result.text || result.output || result.rephrased_text;
-    //     if (stealthText) {
-    //       humanizedBlogMarkdown = stealthText;
-    //       logger.success('StealthGPT humanization successful');
-    //     }
-    //   } else {
-    //     logger.info('StealthGPT failed, using OpenAI content as-is');
-    //   }
-    // } catch (err) {
-    //   logger.error('Humanization error:', err.message);
-    // }
+${enhancedBlogMarkdown}
+
+Make it sound more natural and less AI-generated. Use varied sentence structures, add personality, and make it flow better while maintaining all the technical accuracy and information. Only return the improved markdown, nothing else.`;
+
+      const humanizeRes = await callDeepSeekWithRetry([{ role: 'user', content: humanizePrompt }], 10000, 0.7);
+      humanizedBlogMarkdown = humanizeRes.choices[0]?.message?.content || enhancedBlogMarkdown;
+      logger.success('DeepSeek humanization successful');
+    } catch (humanizeError) {
+      logger.error('DeepSeek humanization failed:', humanizeError.message);
+      // Fall back to the original enhanced markdown
+      humanizedBlogMarkdown = enhancedBlogMarkdown;
+    }
 
     // 7. Save to database
     const { data: humanizeData, error: humanizeError } = await supabase
@@ -876,7 +866,7 @@ Return ONLY the complete markdown blog content with images with proper blog form
       .eq('id', humanizeDataId);
 
     logger.success(
-      'Single blog processing completed - Images distributed throughout content, no "Additional Images" section created',
+      'Single blog processing completed with DeepSeek - Images distributed throughout content, no "Additional Images" section created',
     );
 
     return {
@@ -892,6 +882,7 @@ Return ONLY the complete markdown blog content with images with proper blog form
       wordpressPostId: wordpressResult.success ? wordpressResult.postId : null,
       wordpressUrl: wordpressResult.success ? wordpressResult.url : null,
       wordpressError: wordpressResult.success ? null : wordpressResult.error,
+      aiProvider: 'DeepSeek'
     };
   } catch (error) {
     logger.error('Error processing single blog:', error);
@@ -988,6 +979,7 @@ export async function GET(req) {
         shopify: item.shopify_url,
         wordpress: item.wp_url,
       },
+      ai_provider: 'DeepSeek'
     }));
 
     const summary = {
@@ -1002,10 +994,11 @@ export async function GET(req) {
         .length,
       unpublished: transformedData.filter((item) => !item.is_published_anywhere)
         .length,
+      aiProvider: 'DeepSeek'
     };
 
     logger.success(
-      `Successfully fetched ${transformedData.length} humanized blogs`,
+      `Successfully fetched ${transformedData.length} humanized blogs processed with DeepSeek`,
     );
 
     return new Response(
@@ -1038,7 +1031,7 @@ export async function GET(req) {
 // POST endpoint - Process a single blog URL
 export async function POST(req) {
   try {
-    console.log('🔍 POST endpoint hit');
+    console.log('🔍 POST endpoint hit for DeepSeek processing');
 
     let requestBody;
     try {
@@ -1102,7 +1095,7 @@ export async function POST(req) {
       );
     }
 
-    logger.info(`Processing blog request for: ${url}`);
+    logger.info(`Processing blog request with DeepSeek for: ${url}`);
 
     const result = await processSingleBlog(url);
 
@@ -1118,6 +1111,7 @@ export async function POST(req) {
         success: false,
         error: error.message || 'Processing failed',
         stack: error.stack,
+        aiProvider: 'DeepSeek'
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     );

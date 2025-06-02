@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "es5",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -15,8 +19,12 @@
     "jsx": "preserve",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "~/*": ["./public/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "~/*": [
+        "./public/*"
+      ]
     },
     "incremental": true,
     "plugins": [
@@ -30,9 +38,14 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "src/app/api/test/route.js",
     "src/lib/supabaseClient.js"
   ],
-  "exclude": ["node_modules"],
-  "moduleResolution": ["node_modules", ".next", "node"]
+  "exclude": [
+    "node_modules"
+  ],
+  "moduleResolution": [
+    "node_modules",
+    ".next",
+    "node"
+  ]
 }

@@ -3,8 +3,10 @@ import { OpenAI } from 'openai';
 import { marked } from 'marked';
 import supabase from '@/lib/supabaseClient';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Initialize DeepSeek API client
+const deepseek = new OpenAI({
+  apiKey: 'sk-7cea9a49d17642c193d15edb2ebd659e',
+  baseURL: 'https://api.deepseek.com/v1'
 });
 
 // SHOPIFY CONFIGURATION
@@ -14,7 +16,7 @@ const SHOPIFY_SHOP_DOMAIN = process.env.SHOPIFY_SHOP_DOMAIN;
 // WORDPRESS CONFIGURATION
 const WP_URL = process.env.Administrative_URL;
 const WP_USER = process.env.Admin_Username;
-const WP_PASS = process.env.Admin_Password;
+const WP_PASS = 'FAO9 ugz8 frso pmP3 WRlV 4oAE';
 const WP_AUTH = Buffer.from(`${WP_USER}:${WP_PASS}`).toString('base64');
 
 const feedList = [];
@@ -296,28 +298,6 @@ export async function testShopify() {
     return { success: true, shopName: data.shop.name };
   } catch (error) {
     logger.error('Shopify test failed:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-export async function testWordPress() {
-  try {
-    const response = await fetch('https://44.202.122.176/wp-json/wp/v2/posts', {
-      headers: {
-        Authorization: `Basic ${WP_AUTH}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`WordPress connection failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    logger.success(`Connected to WordPress as: ${data.name}`);
-    return { success: true, userName: data.name };
-  } catch (error) {
-    logger.error('WordPress test failed:', error);
     return { success: false, error: error.message };
   }
 }
@@ -620,6 +600,7 @@ export async function GET(req) {
         shopify: item.shopify_url,
         wordpress: item.wp_url,
       },
+      ai_provider: 'DeepSeek'
     }));
 
     // Calculate summary stats
@@ -635,10 +616,11 @@ export async function GET(req) {
         .length,
       unpublished: transformedData.filter((item) => !item.is_published_anywhere)
         .length,
+      aiProvider: 'DeepSeek'
     };
 
     logger.success(
-      `Successfully fetched ${transformedData.length} humanized blogs`,
+      `Successfully fetched ${transformedData.length} humanized blogs processed with DeepSeek`,
     );
 
     return new Response(
@@ -784,8 +766,8 @@ function extractTextFromHTML(html) {
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-// Helper function for OpenAI API with retry logic
-async function callOpenAIWithRetry(
+// Helper function for DeepSeek API with retry logic
+async function callDeepSeekWithRetry(
   messages,
   maxTokens = 10000,
   temperature = 0.2,
@@ -796,8 +778,8 @@ async function callOpenAIWithRetry(
 
   while (retries < maxRetries) {
     try {
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
+      const response = await deepseek.chat.completions.create({
+        model: 'deepseek-chat',
         messages: messages,
         max_tokens: maxTokens,
         temperature: temperature,
@@ -806,7 +788,7 @@ async function callOpenAIWithRetry(
     } catch (error) {
       lastError = error;
       console.log(
-        `⚠️ OpenAI API error (attempt ${retries + 1}/${maxRetries}): ${error.message
+        `⚠️ DeepSeek API error (attempt ${retries + 1}/${maxRetries}): ${error.message
         }`,
       );
 
@@ -819,7 +801,7 @@ async function callOpenAIWithRetry(
 
   // If we got here, all retries failed
   throw new Error(
-    `OpenAI API failed after ${maxRetries} attempts. Last error: ${lastError.message}`,
+    `DeepSeek API failed after ${maxRetries} attempts. Last error: ${lastError.message}`,
   );
 }
 
@@ -943,7 +925,7 @@ async function processItem(
     }
 
     logger.info(
-      `Processing item ${index + 1}/${totalItems}: ${item.title?.substring(
+      `Processing item ${index + 1}/${totalItems} with DeepSeek: ${item.title?.substring(
         0,
         30,
       )}... ${shouldHumanize ? '(with humanization)' : '(raw only)'}`,
@@ -964,20 +946,6 @@ async function processItem(
     }
 
     const rssItemId = rssItemData[0].id;
-
-    // If no humanization needed, just return basic processing
-    // if (!shouldHumanize) {
-    //   logger.info(`Skipping humanization for item ${index + 1}`);
-    //   return {
-    //     status: 'success',
-    //     rssItemId,
-    //     shopifySuccess: false,
-    //     wordpressSuccess: false,
-    //     shopifyArticleId: null,
-    //     wordpressPostId: null,
-    //     humanized: false,
-    //   };
-    // }
 
     // 2. Fetch full HTML content from the blog URL
     logger.info(`Fetching full HTML from: ${item.link}`);
@@ -1348,7 +1316,7 @@ async function processItem(
       // Continue with RSS data if HTML fetch fails
     }
 
-    // 3. Prepare item data for OpenAI extraction
+    // 3. Prepare item data for DeepSeek extraction
     const description = item.description || '';
     const content = item.content || '';
 
@@ -1442,7 +1410,7 @@ async function processItem(
       source_domain: new URL(item.link).hostname,
     };
 
-    // Convert blogData to JSON string for OpenAI prompt
+    // Convert blogData to JSON string for DeepSeek prompt
     const rawItemJSON = JSON.stringify(blogData);
 
     // ENHANCED PROMPT: Improved to handle both text and images better
@@ -1468,7 +1436,7 @@ IMPORTANT: Your output must be in perfect markdown format, ready to be displayed
 
 Return ONLY the markdown blog content, with no extra commentary. It should be ready to display as-is. don't show "markdown" in the starting just show the tile as # title`;
 
-    // 4. Use OpenAI to extract and enhance data with retry logic
+    // 4. Use DeepSeek to extract and enhance data with retry logic
     let enhancedBlogMarkdown = '';
     try {
       const systemMessage = {
@@ -1481,18 +1449,18 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
     - Include an introduction, body with logical headings, and a concise conclusion.
     - Do not include any HTML or raw JSON; only Markdown.`
       };
-      const aiRes = await callOpenAIWithRetry(
+      const aiRes = await callDeepSeekWithRetry(
         [systemMessage, { role: 'user', content: prompt }],
         16000,
       );
       enhancedBlogMarkdown = aiRes.choices[0]?.message?.content || '';
       logger.info(
-        `OpenAI blog creation: ${enhancedBlogMarkdown.substring(0, 100)}...`,
+        `DeepSeek blog creation: ${enhancedBlogMarkdown.substring(0, 100)}...`,
       );
-    } catch (openAiError) {
-      logger.error(`Failed to create blog with OpenAI:`, openAiError.message);
+    } catch (deepSeekError) {
+      logger.error(`Failed to create blog with DeepSeek:`, deepSeekError.message);
 
-      // If OpenAI fails, create a basic markdown blog from available data
+      // If DeepSeek fails, create a basic markdown blog from available data
       enhancedBlogMarkdown = `# ${blogData.title}\n\n`;
 
       if (blogData.pubDate) {
@@ -1516,9 +1484,6 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
         10000,
       )}...\n\n`;
 
-      // Add link to original
-      // enhancedBlogMarkdown += `[Read the full article](${blogData.url})\n\n`;
-
       // Add categories if available
       if (blogData.categories && blogData.categories.length > 0) {
         enhancedBlogMarkdown += `**Categories:** ${blogData.categories.join(
@@ -1527,68 +1492,30 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
       }
     }
 
-    // 5. Humanize the generated blog with StealthGPT or OpenAI fallback
+    // 5. Humanize the generated blog with DeepSeek
     let humanizedBlogMarkdown = enhancedBlogMarkdown;
 
-    //     try {
-    //       // First try with StealthGPT
-    //       logger.info(`Trying StealthGPT for item ${index + 1}`);
+    try {
+      logger.info(`Using DeepSeek for humanization for item ${index + 1}`);
 
-    //       const requestBody = {
-    //         prompt: enhancedBlogMarkdown,
-    //         rephrase: true,
-    //       };
+      const humanizePrompt = `
+Improve this blog post markdown to make it more engaging, conversational, and human-sounding while keeping the same structure and information:
 
-    //       const res = await fetch('https://stealthgpt.ai/api/stealthify', {
-    //         method: 'POST',
-    //         headers: {
-    //           Authorization: `Bearer ${process.env.STEALTHGPT_API_KEY}`,
-    //           'Content-Type': 'application/json',
-    //         },
-    //         body: JSON.stringify(requestBody),
-    //       });
+${enhancedBlogMarkdown}
 
-    //       // If StealthGPT succeeds, use its result
-    //       if (res.ok) {
-    //         const result = await res.json();
-    //         const stealthText =
-    //           result.text || result.output || result.rephrased_text;
+Make it sound more natural and less AI-generated. Use varied sentence structures, add personality, and make it flow better while maintaining all the technical accuracy and information. Only return the improved markdown, nothing else.`;
 
-    //         if (stealthText) {
-    //           logger.success(`StealthGPT succeeded for item ${index + 1}`);
-    //           humanizedBlogMarkdown = stealthText;
-    //         }
-    //       } else {
-    //         // If StealthGPT fails, use OpenAI as fallback with retry logic
-    //         logger.info(
-    //           `StealthGPT failed, falling back to OpenAI for item ${index + 1}`,
-    //         );
-
-    //         const fallbackPrompt = `
-    // Improve this blog post markdown to make it more engaging, conversational, and human-sounding while keeping the same structure and information:
-
-    // ${enhancedBlogMarkdown}
-
-    // Only return the improved markdown, nothing else. Maintain all headings, images, and formatting.`;
-
-    //         try {
-    //           const fallbackRes = await callOpenAIWithRetry(
-    //             [{ role: 'user', content: fallbackPrompt }],
-    //             10000,
-    //             0.7,
-    //           );
-    //           humanizedBlogMarkdown =
-    //             fallbackRes.choices[0]?.message?.content || enhancedBlogMarkdown;
-    //           logger.success(`OpenAI fallback succeeded for item ${index + 1}`);
-    //         } catch (fallbackError) {
-    //           logger.error(`OpenAI fallback failed: ${fallbackError.message}`);
-    //           // Keep original enhanced blog markdown
-    //         }
-    //       }
-    //     } catch (err) {
-    //       logger.error(`Humanization error for item ${index + 1}:`, err.message);
-    //       // Keep the original enhanced blog markdown if humanization fails
-    //     }
+      const humanizeRes = await callDeepSeekWithRetry(
+        [{ role: 'user', content: humanizePrompt }],
+        10000,
+        0.7,
+      );
+      humanizedBlogMarkdown = humanizeRes.choices[0]?.message?.content || enhancedBlogMarkdown;
+      logger.success(`DeepSeek humanization succeeded for item ${index + 1}`);
+    } catch (humanizeError) {
+      logger.error(`DeepSeek humanization failed: ${humanizeError.message}`);
+      // Keep the original enhanced blog markdown if humanization fails
+    }
 
     // 6. Insert the comprehensive markdown into Humanize_Data
     const { data: humanizeData, error: humanizeError } = await supabase
@@ -1656,7 +1583,7 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
     // Log results
     if (shopifyResult.success && wordpressResult.success) {
       logger.success(
-        `Successfully published to BOTH platforms for item ${index + 1}`,
+        `Successfully published to BOTH platforms for item ${index + 1} using DeepSeek`,
         {
           shopify_id: shopifyResult.articleId,
           wordpress_id: wordpressResult.postId,
@@ -1677,7 +1604,7 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
       );
     }
 
-    logger.success(`Successfully processed item ${index + 1}`);
+    logger.success(`Successfully processed item ${index + 1} with DeepSeek`);
     return {
       status: 'success',
       rssItemId,
@@ -1686,6 +1613,7 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
       wordpressSuccess: wordpressResult.success,
       wordpressPostId: wordpressResult.success ? wordpressResult.postId : null,
       humanized: true,
+      aiProvider: 'DeepSeek'
     };
   } catch (itemError) {
     logger.error(`Error processing item ${index}:`, itemError);
@@ -1707,10 +1635,11 @@ async function processFeedContent(feedData, feedId, selectedIndices = null) {
     humanized: 0,
     skipped: 0,
     rss_feed_data_ids: [],
+    aiProvider: 'DeepSeek'
   };
 
   logger.info(
-    `Processing ${feedData.items.length} items from feed${selectedIndices
+    `Processing ${feedData.items.length} items from feed with DeepSeek${selectedIndices
       ? ` (${selectedIndices.length} selected for humanization)`
       : ' (all humanized)'
     }`,
@@ -1775,7 +1704,7 @@ export async function POST(req) {
       throw new Error('Invalid or missing URL');
     }
 
-    logger.info(`Processing RSS feed: ${url}`);
+    logger.info(`Processing RSS feed with DeepSeek: ${url}`);
     if (selectedItems) {
       logger.info(`Selected items for humanization: ${selectedItems.length}`);
     }
@@ -2057,6 +1986,7 @@ export async function POST(req) {
         rss_feed_data_ids: processingResults.rss_feed_data_ids,
         selective: !!selectedItems,
         platforms: ['Shopify', 'WordPress'], // Indicates dual publishing
+        aiProvider: 'DeepSeek'
       }),
       {
         status: 200,
@@ -2069,6 +1999,7 @@ export async function POST(req) {
       JSON.stringify({
         success: false,
         error: err.message,
+        aiProvider: 'DeepSeek'
       }),
       {
         status: 500,
