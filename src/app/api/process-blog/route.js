@@ -774,25 +774,25 @@ Return ONLY the complete markdown blog content with images with proper blog form
     }
 
     // 6. Humanize with DeepSeek
-    let humanizedBlogMarkdown = enhancedBlogMarkdown;
+    let humanizedBlogMarkdown = enhancedBlogMarkdown.replaceAll('```', '').replaceAll('markdown\n', '');
 
-    try {
-      logger.info('Using DeepSeek for humanization');
+    //     try {
+    //       logger.info('Using DeepSeek for humanization');
 
-      const humanizePrompt = `
-Improve this blog post markdown to make it more engaging, conversational, and human-sounding while keeping the same structure and information:
+    //       const humanizePrompt = `
+    // Improve this blog post markdown to make it more engaging, conversational, and human-sounding while keeping the same structure and information:
 
-${enhancedBlogMarkdown}
+    // ${enhancedBlogMarkdown}
 
-Make it sound more natural and less AI-generated. Use varied sentence structures, add personality, and make it flow better while maintaining all the technical accuracy and information. Only return the improved markdown, nothing else.`;
+    // Make it sound more natural and less AI-generated. Use varied sentence structures, add personality, and make it flow better while maintaining all the technical accuracy and information. Only return the improved markdown, nothing else.`;
 
-      const humanizeRes = await callDeepSeekWithRetry([{ role: 'user', content: humanizePrompt }], 10000, 0.7);
-      humanizedBlogMarkdown = humanizeRes.choices[0]?.message?.content || enhancedBlogMarkdown;
-      logger.success('DeepSeek humanization successful');
-    } catch (humanizeError) {
-      logger.error('DeepSeek humanization failed:', humanizeError.message);
-      humanizedBlogMarkdown = enhancedBlogMarkdown;
-    }
+    //       const humanizeRes = await callDeepSeekWithRetry([{ role: 'user', content: humanizePrompt }], 10000, 0.7);
+    //       humanizedBlogMarkdown = humanizeRes.choices[0]?.message?.content || enhancedBlogMarkdown;
+    //       logger.success('DeepSeek humanization successful');
+    //     } catch (humanizeError) {
+    //       logger.error('DeepSeek humanization failed:', humanizeError.message);
+    //       humanizedBlogMarkdown = enhancedBlogMarkdown;
+    //     }
 
     // 7. Save to database
     const { data: humanizeData, error: humanizeError } = await supabase

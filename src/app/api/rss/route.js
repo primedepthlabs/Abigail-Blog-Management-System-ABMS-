@@ -837,7 +837,8 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
     - Insert images in context; provide alt text and optional captions.
     - Maintain an engaging, authoritative tone.
     - Include an introduction, body with logical headings, and a concise conclusion.
-    - Do not include any HTML or raw JSON; only Markdown.`
+    - Do not include any HTML or raw JSON; only Markdown.
+    - Don't show "markdown" in the starting just show the title as # title`
       };
       const aiRes = await callDeepSeekWithRetry(
         [systemMessage, { role: 'user', content: prompt }],
@@ -874,30 +875,30 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
     }
 
     // 5. Humanize the generated blog with DeepSeek
-    let humanizedBlogMarkdown = enhancedBlogMarkdown;
+    let humanizedBlogMarkdown = enhancedBlogMarkdown.replaceAll('```', '').replaceAll('markdown\n', '');
 
-    if (shouldHumanize) {
-      try {
-        logger.info(`Using DeepSeek for humanization for item ${index + 1}`);
+    //     if (shouldHumanize) {
+    //       try {
+    //         logger.info(`Using DeepSeek for humanization for item ${index + 1}`);
 
-        const humanizePrompt = `
-Improve this blog post markdown to make it more engaging, conversational, and human-sounding while keeping the same structure and information:
+    //         const humanizePrompt = `
+    // Improve this blog post markdown to make it more engaging, conversational, and human-sounding while keeping the same structure and information:
 
-${enhancedBlogMarkdown}
+    // ${enhancedBlogMarkdown}
 
-Make it sound more natural and less AI-generated. Use varied sentence structures, add personality, and make it flow better while maintaining all the technical accuracy and information. Only return the improved markdown, nothing else.`;
+    // Make it sound more natural and less AI-generated. Use varied sentence structures, add personality, and make it flow better while maintaining all the technical accuracy and information. Only return the improved markdown, nothing else.`;
 
-        const humanizeRes = await callDeepSeekWithRetry(
-          [{ role: 'user', content: humanizePrompt }],
-          10000,
-          0.7,
-        );
-        humanizedBlogMarkdown = humanizeRes.choices[0]?.message?.content || enhancedBlogMarkdown;
-        logger.success(`DeepSeek humanization succeeded for item ${index + 1}`);
-      } catch (humanizeError) {
-        logger.error(`DeepSeek humanization failed: ${humanizeError.message}`);
-      }
-    }
+    //         const humanizeRes = await callDeepSeekWithRetry(
+    //           [{ role: 'user', content: humanizePrompt }],
+    //           10000,
+    //           0.7,
+    //         );
+    //         humanizedBlogMarkdown = humanizeRes.choices[0]?.message?.content || enhancedBlogMarkdown;
+    //         logger.success(`DeepSeek humanization succeeded for item ${index + 1}`);
+    //       } catch (humanizeError) {
+    //         logger.error(`DeepSeek humanization failed: ${humanizeError.message}`);
+    //       }
+    //     }
 
     // 6. Insert the comprehensive markdown into Humanize_Data
     const { data: humanizeData, error: humanizeError } = await supabase
