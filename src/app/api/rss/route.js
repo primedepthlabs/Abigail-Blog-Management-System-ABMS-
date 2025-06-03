@@ -304,6 +304,7 @@ export async function testShopify() {
 
 // ========== RSS FUNCTIONS ==========
 
+
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const url = searchParams.get('url');
@@ -360,6 +361,7 @@ export async function GET(req) {
             const children = Array.from(item.children);
             const itemData = {};
 
+            // Standard RSS elements
             itemData.title = item.querySelector('title')?.textContent || '';
             itemData.link = item.querySelector('link')?.textContent || '';
             itemData.pubDate = item.querySelector('pubDate')?.textContent || '';
@@ -370,14 +372,16 @@ export async function GET(req) {
               item.querySelectorAll('category'),
             ).map((cat) => cat.textContent);
 
+            // Handle content:encoded specially
             const contentEncoded =
               item.querySelector('content\\:encoded') ||
               item.getElementsByTagNameNS('*', 'encoded')[0];
 
             if (contentEncoded) {
-              itemData.content = contentEncoded.textContent || '';
+              itemData.contentEncoded = contentEncoded.textContent || '';
             }
 
+            // Handle media elements
             const mediaThumbnail =
               item.querySelector('media\\:thumbnail') ||
               item.getElementsByTagNameNS('*', 'thumbnail')[0];
@@ -398,26 +402,41 @@ export async function GET(req) {
               }
             }
 
+            // Process remaining elements, avoiding conflicts
+            const processedElements = new Set([
+              'title',
+              'link',
+              'pubdate',
+              'description',
+              'guid',
+              'category',
+              'content:encoded' // Add this to avoid reprocessing
+            ]);
+
             children.forEach((child) => {
               const nodeName = child.nodeName.toLowerCase();
-              if (
-                ![
-                  'title',
-                  'link',
-                  'pubdate',
-                  'description',
-                  'guid',
-                  'category',
-                ].includes(nodeName)
-              ) {
-                if (nodeName.includes(':')) {
-                  const [namespace, name] = nodeName.split(':');
-                  if (!itemData[namespace]) itemData[namespace] = {};
-                  itemData[namespace][name] = child.textContent;
-                } else {
-                  if (!itemData[nodeName]) {
-                    itemData[nodeName] = child.textContent;
-                  }
+
+              // Skip already processed elements
+              if (processedElements.has(nodeName)) {
+                return;
+              }
+
+              if (nodeName.includes(':')) {
+                const [namespace, name] = nodeName.split(':');
+
+                // Initialize namespace object if it doesn't exist
+                if (!itemData[namespace] || typeof itemData[namespace] !== 'object') {
+                  itemData[namespace] = {};
+                }
+
+                // Only set if the namespace object is actually an object
+                if (typeof itemData[namespace] === 'object' && !Array.isArray(itemData[namespace])) {
+                  itemData[namespace][name] = child.textContent || '';
+                }
+              } else {
+                // For non-namespaced elements, only set if not already set
+                if (!itemData.hasOwnProperty(nodeName)) {
+                  itemData[nodeName] = child.textContent || '';
                 }
               }
             });
@@ -641,7 +660,6 @@ export async function GET(req) {
     });
   }
 }
-
 // Extract multiple image URLs from HTML content
 function extractImagesFromHTML(html) {
   if (!html) return [];
