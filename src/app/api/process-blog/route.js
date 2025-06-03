@@ -7,19 +7,9 @@ import * as cheerio from 'cheerio';
 
 // Initialize DeepSeek API client
 const deepseek = new OpenAI({
-  apiKey: 'sk-7cea9a49d17642c193d15edb2ebd659e',
+  apiKey: process.env.DEEPSEEK_API_KEY || 'sk-7cea9a49d17642c193d15edb2ebd659e',
   baseURL: 'https://api.deepseek.com/v1'
 });
-
-// SHOPIFY CONFIGURATION
-const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
-const SHOPIFY_SHOP_DOMAIN = process.env.SHOPIFY_SHOP_DOMAIN;
-
-// WORDPRESS CONFIGURATION
-const WP_URL = process.env.Administrative_URL;
-const WP_USER = process.env.Admin_Username;
-const WP_PASS = 'FAO9 ugz8 frso pmP3 WRlV 4oAE';
-const WP_AUTH = Buffer.from(`${WP_USER}:${WP_PASS}`).toString('base64');
 
 const logger = {
   info: (message, data) => {
@@ -60,8 +50,7 @@ async function callDeepSeekWithRetry(
     } catch (error) {
       lastError = error;
       console.log(
-        `⚠️ DeepSeek API error (attempt ${retries + 1}/${maxRetries}): ${error.message
-        }`,
+        `⚠️ DeepSeek API error (attempt ${retries + 1}/${maxRetries}): ${error.message}`,
       );
       const waitTime = Math.pow(2, retries) * 1000;
       await new Promise((resolve) => setTimeout(resolve, waitTime));
@@ -100,14 +89,14 @@ function extractTitle(markdown) {
   return 'Blog Post';
 }
 
-// SHOPIFY FUNCTIONS
-async function getBlogId() {
+// SHOPIFY FUNCTIONS - Dynamic configuration
+async function getBlogId(shopifyConfig) {
   try {
     const response = await fetch(
-      `https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-10/blogs.json`,
+      `https://${shopifyConfig.shopDomain}/admin/api/2023-10/blogs.json`,
       {
         headers: {
-          'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+          'X-Shopify-Access-Token': shopifyConfig.accessToken,
           'Content-Type': 'application/json',
         },
       },
@@ -120,20 +109,20 @@ async function getBlogId() {
     const data = await response.json();
     if (data.blogs && data.blogs.length > 0) {
       logger.info(
-        `Using Shopify blog: ${data.blogs[0].title} (ID: ${data.blogs[0].id})`,
+        `Using Shopify blog: ${data.blogs[0].title} (ID: ${data.blogs[0].id}) on ${shopifyConfig.name}`,
       );
       return data.blogs[0].id;
     }
     throw new Error('No blogs found');
   } catch (error) {
-    logger.error('Error getting blog ID:', error);
+    logger.error(`Error getting blog ID for ${shopifyConfig.name}:`, error);
     throw error;
   }
 }
 
-async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
+async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyConfig) {
   try {
-    const blogId = await getBlogId();
+    const blogId = await getBlogId(shopifyConfig);
     const title = extractTitle(humanizedMarkdown);
     const htmlContent = markdownToHtml(humanizedMarkdown);
 
@@ -146,18 +135,17 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
       .replace(/\*(.*?)\*/g, '$1')
       .trim();
 
-    // Use full content for excerpt instead of truncating
     const excerpt = plainText; // No truncation
-    const tags = 'Single Blog, Auto-Generated';
+    const tags = `Single Blog, Auto-Generated, ${shopifyConfig.name}`;
 
     const articleData = {
       article: {
         title: title,
         body_html: htmlContent,
-        summary: excerpt, // Full content
+        summary: excerpt,
         tags: tags,
         published: false,
-        author: blogData.author || 'Blog Bot',
+        author: shopifyConfig.defaultAuthor || blogData.author || 'Blog Bot',
         created_at: blogData.pubDate
           ? new Date(blogData.pubDate).toISOString()
           : new Date().toISOString(),
@@ -177,14 +165,14 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
       };
     }
 
-    logger.info(`Creating Shopify blog post: "${title}"`);
+    logger.info(`Creating Shopify blog post on ${shopifyConfig.name}: "${title}"`);
 
     const response = await fetch(
-      `https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-10/blogs/${blogId}/articles.json`,
+      `https://${shopifyConfig.shopDomain}/admin/api/2023-10/blogs/${blogId}/articles.json`,
       {
         method: 'POST',
         headers: {
-          'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+          'X-Shopify-Access-Token': shopifyConfig.accessToken,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(articleData),
@@ -199,34 +187,42 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}) {
     }
 
     const result = await response.json();
-    logger.success(`Created Shopify blog post: ${result.article.id}`);
+    logger.success(`Created Shopify blog post on ${shopifyConfig.name}: ${result.article.id}`);
 
     return {
       success: true,
+      platform: 'shopify',
+      destination: shopifyConfig.name,
+      destinationId: shopifyConfig.id,
       articleId: result.article.id,
       title: result.article.title,
       handle: result.article.handle,
-      url: `https://${SHOPIFY_SHOP_DOMAIN.replace(
+      url: `https://${shopifyConfig.shopDomain.replace(
         '.myshopify.com',
         '',
       )}/blogs/${result.article.blog_id}/${result.article.handle}`,
+      publishedAt: new Date().toISOString(),
     };
   } catch (error) {
-    logger.error('Failed to create Shopify blog post:', error);
+    logger.error(`Failed to create Shopify blog post on ${shopifyConfig.name}:`, error);
     return {
       success: false,
+      platform: 'shopify',
+      destination: shopifyConfig.name,
+      destinationId: shopifyConfig.id,
       error: error.message,
+      publishedAt: new Date().toISOString(),
     };
   }
 }
 
-// WORDPRESS FUNCTION
-async function createWordPressBlogPost(humanizedMarkdown, blogData = {}) {
+// WORDPRESS FUNCTIONS - Dynamic configuration
+async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfig) {
   try {
     const title = extractTitle(humanizedMarkdown);
     const htmlContent = markdownToHtml(humanizedMarkdown);
 
-    logger.info(`Creating WordPress blog post: "${title}"`);
+    logger.info(`Creating WordPress blog post on ${wpConfig.name}: "${title}"`);
 
     // Extract full plain text without truncation
     const plainText = humanizedMarkdown
@@ -237,22 +233,24 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}) {
       .replace(/\*(.*?)\*/g, '$1')
       .trim();
 
-    // Use full content for excerpt instead of truncating
     const excerpt = plainText; // No truncation
+
+    const wpAuth = Buffer.from(`${wpConfig.username}:${wpConfig.password}`).toString('base64');
 
     const wpPayload = {
       title: title,
       content: htmlContent,
-      status: 'publish',
-      excerpt: excerpt, // Full content
+      status: wpConfig.defaultStatus || 'publish',
+      excerpt: excerpt,
       author: 1,
-      categories: [1],
-      tags: [],
+      categories: wpConfig.defaultCategory ? [wpConfig.defaultCategory] : [1],
+      tags: wpConfig.tags || [],
       meta: {
         _wp_original_source: blogData.url || '',
         _wp_original_author: blogData.author || '',
         _wp_publication_date: blogData.pubDate || new Date().toISOString(),
         _wp_rss_source: 'Auto-Generated from Single Blog URL',
+        _wp_destination: wpConfig.name,
       },
     };
 
@@ -261,19 +259,19 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}) {
       wpPayload.featured_media_url = blogData.images[0].url;
     }
 
-    const wpRes = await fetch(WP_URL, {
+    const wpRes = await fetch(wpConfig.apiUrl, {
       method: 'POST',
       headers: {
-        Authorization: `Basic ${WP_AUTH}`,
+        Authorization: `Basic ${wpAuth}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(wpPayload),
     });
 
     const wpData = await wpRes.json();
-    console.log({ wpData })
+
     if (!wpRes.ok) {
-      logger.error('WordPress API error:', {
+      logger.error(`WordPress API error for ${wpConfig.name}:`, {
         status: wpRes.status,
         statusText: wpRes.statusText,
         response: wpData,
@@ -281,27 +279,39 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}) {
 
       return {
         success: false,
+        platform: 'wordpress',
+        destination: wpConfig.name,
+        destinationId: wpConfig.id,
         error: wpData.message || `WordPress API error: ${wpRes.status}`,
+        publishedAt: new Date().toISOString(),
       };
     }
 
-    logger.success(`Successfully published to WordPress`, {
+    logger.success(`Successfully published to WordPress ${wpConfig.name}`, {
       wp_post_id: wpData.id,
       wp_url: wpData.link || 'N/A',
     });
 
     return {
       success: true,
+      platform: 'wordpress',
+      destination: wpConfig.name,
+      destinationId: wpConfig.id,
       postId: wpData.id,
       title: wpData.title?.rendered || title,
       url: wpData.link,
       slug: wpData.slug,
+      publishedAt: new Date().toISOString(),
     };
   } catch (error) {
-    logger.error('Failed to create WordPress blog post:', error);
+    logger.error(`Failed to create WordPress blog post on ${wpConfig.name}:`, error);
     return {
       success: false,
+      platform: 'wordpress',
+      destination: wpConfig.name,
+      destinationId: wpConfig.id,
       error: error.message,
+      publishedAt: new Date().toISOString(),
     };
   }
 }
@@ -341,8 +351,7 @@ async function fetchBlogContent(blogUrl) {
 
       if (status === 403) {
         throw new Error(
-          `Access denied (403). The website "${new URL(blogUrl).hostname
-          }" is blocking automated requests. Please try a different URL or contact the site owner.`,
+          `Access denied (403). The website "${new URL(blogUrl).hostname}" is blocking automated requests. Please try a different URL or contact the site owner.`,
         );
       } else if (status === 404) {
         throw new Error(
@@ -359,8 +368,7 @@ async function fetchBlogContent(blogUrl) {
       }
     } else if (error.code === 'ECONNABORTED') {
       throw new Error(
-        `Request timeout. The website "${new URL(blogUrl).hostname
-        }" took too long to respond.`,
+        `Request timeout. The website "${new URL(blogUrl).hostname}" took too long to respond.`,
       );
     } else if (error.code === 'ENOTFOUND') {
       throw new Error(
@@ -379,7 +387,6 @@ function extractImages(blogUrl, $) {
   $('img').each((i, img) => {
     const src = $(img).attr('src');
     if (src && !src.includes('data:image')) {
-      // Skip base64 images
       let imgUrl = src;
 
       // Convert relative URLs to absolute
@@ -394,7 +401,6 @@ function extractImages(blogUrl, $) {
       // Get better alt text
       let altText = $(img).attr('alt') || '';
       if (!altText) {
-        // Try to get alt text from nearby text or title
         altText =
           $(img).attr('title') ||
           $(img).closest('figure').find('figcaption').text() ||
@@ -421,7 +427,6 @@ function extractImages(blogUrl, $) {
       const fullUrl = img.url.toLowerCase();
 
       return (
-        // Filter out common unwanted images
         !filename.includes('icon') &&
         !filename.includes('logo') &&
         !filename.includes('favicon') &&
@@ -433,20 +438,18 @@ function extractImages(blogUrl, $) {
         !fullUrl.includes('logo-en.png') &&
         !fullUrl.includes('/logos/') &&
         !fullUrl.includes('/icons/') &&
-        // Filter out tracking pixels and small images
         !fullUrl.includes('1x1') &&
         !fullUrl.includes('pixel') &&
         !fullUrl.includes('tracking')
       );
     })
-    .slice(0, 10); // Keep up to 10 relevant images
+    .slice(0, 10);
 }
 
 // Enhanced content extraction function to get ALL content
 async function extractFullContent(blogUrl, $) {
   let fullTextContent = '';
 
-  // Multiple strategies to extract the complete content
   const contentSelectors = [
     'article',
     '.post-content',
@@ -466,13 +469,11 @@ async function extractFullContent(blogUrl, $) {
     '.blog-post-content',
   ];
 
-  // Try each selector and get the longest content
   let longestContent = '';
 
   for (const selector of contentSelectors) {
     const element = $(selector);
     if (element.length > 0) {
-      // Remove unwanted elements like ads, related posts, etc.
       element
         .find(
           'script, style, .advertisement, .ads, .related-posts, .social-share, .comments, .comment-section, nav, .navigation, .breadcrumb, .json-ld',
@@ -486,7 +487,6 @@ async function extractFullContent(blogUrl, $) {
     }
   }
 
-  // If no content found with specific selectors, try body but filter out navigation, footer, etc.
   if (!longestContent) {
     const bodyClone = $('body').clone();
     bodyClone
@@ -497,13 +497,12 @@ async function extractFullContent(blogUrl, $) {
     longestContent = bodyClone.text().trim();
   }
 
-  // Clean up the content and remove JSON-like patterns
   fullTextContent = longestContent
     .replace(/\s+/g, ' ')
-    .replace(/\{[^}]*\}/g, '') // Remove JSON-like objects
-    .replace(/\[[^\]]*\]/g, '') // Remove arrays
-    .replace(/https?:\/\/[^\s]+/g, '') // Remove URLs that got mixed in
-    .replace(/\b\w+:\w+\b/g, '') // Remove key:value patterns
+    .replace(/\{[^}]*\}/g, '')
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/https?:\/\/[^\s]+/g, '')
+    .replace(/\b\w+:\w+\b/g, '')
     .trim();
 
   logger.info(`Extracted ${fullTextContent.length} characters of content`);
@@ -514,28 +513,23 @@ async function extractFullContent(blogUrl, $) {
 function distributeImagesInContent(contentText, images) {
   if (!images || images.length === 0) return contentText;
 
-  // Split content into paragraphs
   const paragraphs = contentText
     .split('\n\n')
     .filter((p) => p.trim().length > 0);
 
   if (paragraphs.length <= 2) {
-    // If very short content, just add first image at the beginning
-    return `![${images[0].alt || 'Featured Image'}](${images[0].url
-      })\n\n${contentText}`;
+    return `![${images[0].alt || 'Featured Image'}](${images[0].url})\n\n${contentText}`;
   }
 
   let result = '';
   const imageDistributionPoints = [];
 
-  // Calculate distribution points based on content length
   if (images.length === 1) {
-    imageDistributionPoints.push(Math.floor(paragraphs.length * 0.3)); // 30% through content
+    imageDistributionPoints.push(Math.floor(paragraphs.length * 0.3));
   } else if (images.length === 2) {
-    imageDistributionPoints.push(Math.floor(paragraphs.length * 0.25)); // 25% through
-    imageDistributionPoints.push(Math.floor(paragraphs.length * 0.75)); // 75% through
+    imageDistributionPoints.push(Math.floor(paragraphs.length * 0.25));
+    imageDistributionPoints.push(Math.floor(paragraphs.length * 0.75));
   } else {
-    // For multiple images, distribute evenly
     const step = Math.floor(paragraphs.length / (images.length + 1));
     for (let i = 1; i <= images.length; i++) {
       imageDistributionPoints.push(Math.min(step * i, paragraphs.length - 1));
@@ -547,7 +541,6 @@ function distributeImagesInContent(contentText, images) {
   for (let i = 0; i < paragraphs.length; i++) {
     result += paragraphs[i] + '\n\n';
 
-    // Check if we should insert an image after this paragraph
     if (imageIndex < images.length && imageDistributionPoints.includes(i)) {
       const image = images[imageIndex];
       result += `![${image.alt || `Image ${imageIndex + 1}`}](${image.url}${image.caption ? ` "${image.caption}"` : ''
@@ -556,7 +549,6 @@ function distributeImagesInContent(contentText, images) {
     }
   }
 
-  // Add any remaining images at the end if not all were distributed
   while (imageIndex < images.length) {
     const image = images[imageIndex];
     result += `![${image.alt || `Image ${imageIndex + 1}`}](${image.url}${image.caption ? ` "${image.caption}"` : ''
@@ -567,10 +559,34 @@ function distributeImagesInContent(contentText, images) {
   return result.trim();
 }
 
-// Main processing function with improved image placement
-async function processSingleBlog(blogUrl) {
+// UPDATED Main processing function with multi-destination publishing
+async function processSingleBlog(blogUrl, publishingDestinations) {
   try {
     logger.info(`Processing single blog URL with DeepSeek: ${blogUrl}`);
+    logger.info(`Publishing to: ${publishingDestinations.shopify?.length || 0} Shopify stores, ${publishingDestinations.wordpress?.length || 0} WordPress sites`);
+
+    // Validate destination configurations
+    const validationErrors = [];
+
+    if (publishingDestinations.shopify) {
+      publishingDestinations.shopify.forEach((shopifyConfig, index) => {
+        if (!shopifyConfig.shopDomain || !shopifyConfig.accessToken) {
+          validationErrors.push(`Shopify destination ${index + 1}: Missing shop domain or access token`);
+        }
+      });
+    }
+
+    if (publishingDestinations.wordpress) {
+      publishingDestinations.wordpress.forEach((wpConfig, index) => {
+        if (!wpConfig.apiUrl || !wpConfig.username || !wpConfig.password) {
+          validationErrors.push(`WordPress destination ${index + 1}: Missing API URL, username, or password`);
+        }
+      });
+    }
+
+    if (validationErrors.length > 0) {
+      throw new Error(`Destination configuration errors: ${validationErrors.join(', ')}`);
+    }
 
     // 1. Create a pseudo-feed entry for single blog processing
     const { data: feedData, error: feedError } = await supabase
@@ -614,7 +630,6 @@ async function processSingleBlog(blogUrl) {
       fullHtmlContent = await fetchBlogContent(blogUrl);
       const $ = cheerio.load(fullHtmlContent);
 
-      // Extract basic information
       pageTitle = $('title').text().trim() || 'Blog Post';
       pageMetaDescription = $('meta[name="description"]').attr('content') || '';
 
@@ -641,22 +656,15 @@ async function processSingleBlog(blogUrl) {
         }
       }
 
-      // Extract FULL content using enhanced function
       fullTextContent = await extractFullContent(blogUrl, $);
-
-      // Extract images using enhanced function
       pageImages = extractImages(blogUrl, $);
 
       logger.success(`Successfully extracted FULL content from ${blogUrl}`);
       logger.info(`Content length: ${fullTextContent.length} characters`);
       logger.info(`Found ${pageImages.length} images`);
     } catch (fetchError) {
-      logger.error(
-        `Could not fetch content from ${blogUrl}:`,
-        fetchError.message,
-      );
+      logger.error(`Could not fetch content from ${blogUrl}:`, fetchError.message);
 
-      // Use URL to create basic blog data
       pageTitle =
         new URL(blogUrl).pathname.split('/').pop()?.replace(/-/g, ' ') ||
         'Blog Post';
@@ -669,7 +677,7 @@ async function processSingleBlog(blogUrl) {
     // 4. Prepare blog data with FULL content
     const blogData = {
       title: pageTitle,
-      description_text: fullTextContent, // Full content, no truncation
+      description_text: fullTextContent,
       images: pageImages,
       url: blogUrl,
       pubDate: articleDate || '',
@@ -703,7 +711,7 @@ CRITICAL IMAGE PLACEMENT INSTRUCTIONS:
 - DO NOT create an "Additional Images" section
 - Insert images between paragraphs where they naturally fit with the content being discussed
 - Use images to break up long text sections and enhance readability
-- Match images to the content they best illustrate (e.g., if discussing a product, place the product image there)
+- Match images to the content they best illustrate
 - Distribute images evenly throughout the post for better visual flow
 `
         : ''
@@ -723,27 +731,6 @@ ${blogData.images.length > 0
         ? '8. Use proper markdown image syntax: ![alt text](image_url "optional title")'
         : ''
       }
-
-CONTENT STRUCTURE EXAMPLE:
-# [Engaging Title]
-
-[Opening paragraph]
-
-![Relevant Image 1](url1)
-
-## [Section Heading]
-[Content for this section]
-
-![Relevant Image 2](url2)
-
-[More content]
-
-## [Another Section]
-[Content continues]
-
-![Relevant Image 3](url3)
-
-[Final content and conclusion]
 
 IMPORTANT: 
 - Use the ENTIRE content provided. Do not summarize or truncate.
@@ -769,7 +756,7 @@ Return ONLY the complete markdown blog content with images with proper blog form
       };
       const aiRes = await callDeepSeekWithRetry(
         [systemMessage, { role: 'user', content: prompt }],
-        16000, // Increased token limit for full content
+        16000,
       );
       enhancedBlogMarkdown = aiRes.choices[0]?.message?.content || '';
       logger.info(
@@ -778,15 +765,11 @@ Return ONLY the complete markdown blog content with images with proper blog form
     } catch (deepSeekError) {
       logger.error('DeepSeek failed:', deepSeekError.message);
 
-      // Improved fallback content with better image distribution
       enhancedBlogMarkdown = `# ${blogData.title}\n\n`;
-
-      // Distribute images throughout the content instead of placing them at the end
       const contentWithImages = distributeImagesInContent(
         `This blog post is sourced from ${blogData.source_domain}.\n\n${blogData.description_text}`,
         blogData.images,
       );
-
       enhancedBlogMarkdown += contentWithImages;
     }
 
@@ -808,7 +791,6 @@ Make it sound more natural and less AI-generated. Use varied sentence structures
       logger.success('DeepSeek humanization successful');
     } catch (humanizeError) {
       logger.error('DeepSeek humanization failed:', humanizeError.message);
-      // Fall back to the original enhanced markdown
       humanizedBlogMarkdown = enhancedBlogMarkdown;
     }
 
@@ -828,36 +810,75 @@ Make it sound more natural and less AI-generated. Use varied sentence structures
 
     const humanizeDataId = humanizeData[0].id;
 
-    // 8. Dual publishing with full content
-    const shopifyResult = await createShopifyBlogPost(
-      humanizedBlogMarkdown,
-      blogData,
-    );
-    const wordpressResult = await createWordPressBlogPost(
-      humanizedBlogMarkdown,
-      blogData,
+    // 8. MULTI-DESTINATION PUBLISHING
+    logger.info(
+      `Publishing to ${publishingDestinations.shopify.length} Shopify stores and ${publishingDestinations.wordpress.length} WordPress sites`,
     );
 
-    // 9. Update database with publishing results
+    const publishingResults = {
+      shopify: [],
+      wordpress: [],
+    };
+
+    // Publish to all selected Shopify stores in parallel
+    if (publishingDestinations.shopify.length > 0) {
+      const shopifyPromises = publishingDestinations.shopify.map(shopifyConfig =>
+        createShopifyBlogPost(humanizedBlogMarkdown, blogData, shopifyConfig)
+      );
+      const shopifyResults = await Promise.all(shopifyPromises);
+      publishingResults.shopify = shopifyResults;
+    }
+
+    // Publish to all selected WordPress sites in parallel
+    if (publishingDestinations.wordpress.length > 0) {
+      const wpPromises = publishingDestinations.wordpress.map(wpConfig =>
+        createWordPressBlogPost(humanizedBlogMarkdown, blogData, wpConfig)
+      );
+      const wpResults = await Promise.all(wpPromises);
+      publishingResults.wordpress = wpResults;
+    }
+
+    // 9. Calculate metrics
+    const totalDestinations = publishingDestinations.shopify.length + publishingDestinations.wordpress.length;
+    const shopifyPublished = publishingResults.shopify.filter(r => r.success).length;
+    const wordpressPublished = publishingResults.wordpress.filter(r => r.success).length;
+
+    // Create destination results summary
+    const destinationResults = {
+      shopify: publishingDestinations.shopify.map((config, index) => ({
+        name: config.name,
+        published: publishingResults.shopify[index]?.success ? 1 : 0,
+        errors: publishingResults.shopify[index]?.success ? 0 : 1,
+      })),
+      wordpress: publishingDestinations.wordpress.map((config, index) => ({
+        name: config.name,
+        published: publishingResults.wordpress[index]?.success ? 1 : 0,
+        errors: publishingResults.wordpress[index]?.success ? 0 : 1,
+      })),
+    };
+
+    // 10. Update database with all publication results
     const updateData = {
-      shopify_article_id: shopifyResult.success
-        ? shopifyResult.articleId
-        : null,
-      shopify_url: shopifyResult.success ? shopifyResult.url : null,
-      shopify_handle: shopifyResult.success ? shopifyResult.handle : null,
-      published_to_shopify: shopifyResult.success,
-      shopify_created_at: shopifyResult.success
-        ? new Date().toISOString()
-        : null,
-      shopify_error: shopifyResult.success ? null : shopifyResult.error,
-      wp_post_id: wordpressResult.success ? wordpressResult.postId : null,
-      wp_url: wordpressResult.success ? wordpressResult.url : null,
-      wp_slug: wordpressResult.success ? wordpressResult.slug : null,
-      wp_published: wordpressResult.success,
-      wp_published_at: wordpressResult.success
-        ? new Date().toISOString()
-        : null,
-      wp_error: wordpressResult.success ? null : wordpressResult.error,
+      publishing_results: JSON.stringify(publishingResults),
+      total_shopify_published: shopifyPublished,
+      total_wordpress_published: wordpressPublished,
+      total_destinations: totalDestinations,
+      published_at: new Date().toISOString(),
+
+      // Legacy compatibility - set first successful result to old fields
+      published_to_shopify: publishingResults.shopify.some(r => r.success),
+      shopify_article_id: publishingResults.shopify.find(r => r.success)?.articleId || null,
+      shopify_url: publishingResults.shopify.find(r => r.success)?.url || null,
+      shopify_handle: publishingResults.shopify.find(r => r.success)?.handle || null,
+      shopify_created_at: publishingResults.shopify.find(r => r.success)?.publishedAt || null,
+      shopify_error: publishingResults.shopify.find(r => !r.success)?.error || null,
+
+      wp_published: publishingResults.wordpress.some(r => r.success),
+      wp_post_id: publishingResults.wordpress.find(r => r.success)?.postId || null,
+      wp_url: publishingResults.wordpress.find(r => r.success)?.url || null,
+      wp_slug: publishingResults.wordpress.find(r => r.success)?.slug || null,
+      wp_published_at: publishingResults.wordpress.find(r => r.success)?.publishedAt || null,
+      wp_error: publishingResults.wordpress.find(r => !r.success)?.error || null,
     };
 
     await supabase
@@ -866,7 +887,7 @@ Make it sound more natural and less AI-generated. Use varied sentence structures
       .eq('id', humanizeDataId);
 
     logger.success(
-      'Single blog processing completed with DeepSeek - Images distributed throughout content, no "Additional Images" section created',
+      `Single blog processing completed with DeepSeek - Published to ${shopifyPublished + wordpressPublished}/${totalDestinations} destinations`,
     );
 
     return {
@@ -874,14 +895,11 @@ Make it sound more natural and less AI-generated. Use varied sentence structures
       humanizeDataId,
       humanizedContent: humanizedBlogMarkdown,
       blogData,
-      shopifySuccess: shopifyResult.success,
-      shopifyArticleId: shopifyResult.success ? shopifyResult.articleId : null,
-      shopifyUrl: shopifyResult.success ? shopifyResult.url : null,
-      shopifyError: shopifyResult.success ? null : shopifyResult.error,
-      wordpressSuccess: wordpressResult.success,
-      wordpressPostId: wordpressResult.success ? wordpressResult.postId : null,
-      wordpressUrl: wordpressResult.success ? wordpressResult.url : null,
-      wordpressError: wordpressResult.success ? null : wordpressResult.error,
+      publishingResults,
+      totalDestinations,
+      shopifyPublished,
+      wordpressPublished,
+      destinationResults,
       aiProvider: 'DeepSeek'
     };
   } catch (error) {
@@ -902,6 +920,11 @@ export async function GET(req) {
         id,
         humanize_Data,
         created_at,
+        publishing_results,
+        total_shopify_published,
+        total_wordpress_published,
+        total_destinations,
+        published_at,
         shopify_article_id,
         shopify_url,
         shopify_handle,
@@ -943,44 +966,52 @@ export async function GET(req) {
       );
     }
 
-    // Transform data to match your frontend expectations
-    const transformedData = humanizedBlogs.map((item) => ({
-      id: item.id,
-      humanize_Data: item.humanize_Data,
-      created_at: item.created_at,
-      publishing_status: {
-        shopify: {
-          published: item.published_to_shopify || false,
-          article_id: item.shopify_article_id,
-          url: item.shopify_url,
-          handle: item.shopify_handle,
-          published_at: item.shopify_created_at,
-          error: item.shopify_error,
+    // Transform data to match frontend expectations
+    const transformedData = humanizedBlogs.map((item) => {
+      const publishingResults = item.publishing_results ? JSON.parse(item.publishing_results) : null;
+
+      return {
+        id: item.id,
+        humanize_Data: item.humanize_Data,
+        created_at: item.created_at,
+        multi_destination_results: publishingResults,
+        total_destinations: item.total_destinations || 0,
+        total_shopify_published: item.total_shopify_published || 0,
+        total_wordpress_published: item.total_wordpress_published || 0,
+        publishing_status: {
+          shopify: {
+            published: item.published_to_shopify || false,
+            article_id: item.shopify_article_id,
+            url: item.shopify_url,
+            handle: item.shopify_handle,
+            published_at: item.shopify_created_at,
+            error: item.shopify_error,
+          },
+          wordpress: {
+            published: item.wp_published || false,
+            post_id: item.wp_post_id,
+            url: item.wp_url,
+            slug: item.wp_slug,
+            published_at: item.wp_published_at,
+            error: item.wp_error,
+          },
         },
-        wordpress: {
-          published: item.wp_published || false,
-          post_id: item.wp_post_id,
-          url: item.wp_url,
-          slug: item.wp_slug,
-          published_at: item.wp_published_at,
-          error: item.wp_error,
+        source_info: {
+          rss_item_id: item.rss_feed_data_column,
+          original_url: item.rss_feed_data?.blog_url,
+          feed_url: item.rss_feed_data?.rss_feeds?.feed_url,
+          feed_id: item.rss_feed_data?.feed_id,
         },
-      },
-      source_info: {
-        rss_item_id: item.rss_feed_data_column,
-        original_url: item.rss_feed_data?.blog_url,
-        feed_url: item.rss_feed_data?.rss_feeds?.feed_url,
-        feed_id: item.rss_feed_data?.feed_id,
-      },
-      is_published_anywhere: item.published_to_shopify || item.wp_published,
-      is_dual_published: item.published_to_shopify && item.wp_published,
-      has_errors: !!(item.shopify_error || item.wp_error),
-      live_urls: {
-        shopify: item.shopify_url,
-        wordpress: item.wp_url,
-      },
-      ai_provider: 'DeepSeek'
-    }));
+        is_published_anywhere: item.published_to_shopify || item.wp_published,
+        is_dual_published: item.published_to_shopify && item.wp_published,
+        has_errors: !!(item.shopify_error || item.wp_error),
+        live_urls: {
+          shopify: item.shopify_url,
+          wordpress: item.wp_url,
+        },
+        ai_provider: 'DeepSeek'
+      };
+    });
 
     const summary = {
       total: transformedData.length,
@@ -990,10 +1021,12 @@ export async function GET(req) {
       wordpressPublished: transformedData.filter(
         (item) => item.publishing_status.wordpress.published,
       ).length,
-      dualPublished: transformedData.filter((item) => item.is_dual_published)
-        .length,
-      unpublished: transformedData.filter((item) => !item.is_published_anywhere)
-        .length,
+      dualPublished: transformedData.filter((item) => item.is_dual_published).length,
+      unpublished: transformedData.filter((item) => !item.is_published_anywhere).length,
+      totalDestinations: transformedData.reduce((sum, item) => sum + item.total_destinations, 0),
+      avgDestinationsPerItem: transformedData.length > 0
+        ? (transformedData.reduce((sum, item) => sum + item.total_destinations, 0) / transformedData.length).toFixed(1)
+        : 0,
       aiProvider: 'DeepSeek'
     };
 
@@ -1028,10 +1061,10 @@ export async function GET(req) {
   }
 }
 
-// POST endpoint - Process a single blog URL
+// POST endpoint - Process a single blog URL with multi-destination support
 export async function POST(req) {
   try {
-    console.log('🔍 POST endpoint hit for DeepSeek processing');
+    console.log('🔍 POST endpoint hit for DeepSeek multi-destination processing');
 
     let requestBody;
     try {
@@ -1048,13 +1081,12 @@ export async function POST(req) {
       );
     }
 
-    const { url, action } = requestBody;
+    const { url, action, publishingDestinations } = requestBody;
 
     console.log('🔍 Extracted values:');
     console.log('  - URL:', url);
     console.log('  - Action:', action);
-    console.log('  - URL type:', typeof url);
-    console.log('  - Action type:', typeof action);
+    console.log('  - Publishing Destinations:', publishingDestinations);
 
     if (!url || typeof url !== 'string' || !url.trim()) {
       console.log('❌ URL validation failed');
@@ -1073,6 +1105,16 @@ export async function POST(req) {
         JSON.stringify({
           success: false,
           error: `Invalid action. Expected "humanize_and_publish", got "${action}"`,
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
+    if (!publishingDestinations || (!publishingDestinations.shopify?.length && !publishingDestinations.wordpress?.length)) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'No publishing destinations selected',
         }),
         { status: 400, headers: { 'Content-Type': 'application/json' } },
       );
@@ -1097,7 +1139,7 @@ export async function POST(req) {
 
     logger.info(`Processing blog request with DeepSeek for: ${url}`);
 
-    const result = await processSingleBlog(url);
+    const result = await processSingleBlog(url, publishingDestinations);
 
     return new Response(JSON.stringify(result), {
       status: 200,

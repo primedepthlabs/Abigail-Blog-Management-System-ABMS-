@@ -18,8 +18,47 @@ import {
   User,
   Tag,
   Image,
+  Store,
+  Settings,
+  Target,
+  Database,
+  Wifi,
+  WifiOff,
+  AlertTriangle,
+  Shield,
+  Zap,
+  Activity,
 } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
+
+// HARDCODED PUBLISHING DESTINATIONS - Update these with your actual credentials
+const PUBLISHING_DESTINATIONS = {
+  shopify: [],
+  wordpress: [
+    {
+      id: 'wp-1',
+      name: 'Money Grower Blog',
+      apiUrl: 'https://themoneygrower.com/wp-json/wp/v2/posts',
+      username: 'consultantsingh337',
+      password: 'm3aE MZsk qROt qSPR 7f8i lUhd',
+      description: 'Primary WordPress blog',
+      color: 'bg-orange-600',
+      isActive: true,
+      priority: 10,
+    },
+    {
+      id: 'wp-2',
+      name: 'Stone Path Blog',
+      apiUrl: 'https://stonepathproject.com/wp-json/wp/v2/posts',
+      username: 'consultantsingh337',
+      password: 'qJUr SSS0 8XUY Omx5 KIJX g7iB',
+      description: 'Corporate blog site',
+      color: 'bg-cyan-600',
+      isActive: true,
+      priority: 8,
+    }
+  ],
+};
 
 interface RssManagerProps {
   theme: string;
@@ -55,7 +94,6 @@ interface FeedData {
   items: FeedItem[];
 }
 
-// Processing status types
 interface ProcessingStatus {
   isProcessing: boolean;
   currentStep: string;
@@ -68,13 +106,25 @@ interface ProcessingStatus {
     processed: number;
     humanized: number;
     skipped: number;
-    shopifyPosts: number;
-    shopifyErrors: number;
-    wordpressPosts: number;
-    wordpressErrors: number;
-    dualSuccess: number;
+    shopifyPublished: number;
+    wordpressPublished: number;
+    totalDestinations: number;
+    destinationResults: {
+      shopify: Array<{ name: string; published: number; errors: number }>;
+      wordpress: Array<{ name: string; published: number; errors: number }>;
+    };
     errors: number;
   };
+}
+
+interface ConnectionTestResult {
+  success: boolean;
+  destinationId: string;
+  destinationName: string;
+  platform: 'shopify' | 'wordpress';
+  message: string;
+  responseTime?: number;
+  lastTested: string;
 }
 
 export default function RssManager({ theme }: RssManagerProps) {
@@ -87,16 +137,37 @@ export default function RssManager({ theme }: RssManagerProps) {
   const [error, setError] = useState('');
   const [loadingFeeds, setLoadingFeeds] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
-  const [showDescription, setShowDescription] = useState<{
-    [key: number]: boolean;
-  }>({});
+  const [showDescription, setShowDescription] = useState<{ [key: number]: boolean }>({});
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedFeedDetails, setSelectedFeedDetails] = useState<{
-    id: number;
-    url: string;
-  } | null>(null);
+  const [selectedFeedDetails, setSelectedFeedDetails] = useState<{ id: number; url: string } | null>(null);
 
-  // New state for tracking feed processing status
+  // Get active destinations
+  const activeDestinations = {
+    shopify: PUBLISHING_DESTINATIONS.shopify.filter(dest => dest.isActive),
+    wordpress: PUBLISHING_DESTINATIONS.wordpress.filter(dest => dest.isActive),
+  };
+
+  // Initialize with default selections (highest priority active destinations)
+  const [selectedDestinations, setSelectedDestinations] = useState<{
+    shopify: Set<string>;
+    wordpress: Set<string>;
+  }>(() => {
+    const topShopify = activeDestinations.shopify
+      .sort((a, b) => b.priority - a.priority)
+      .slice(0, 2)
+      .map(dest => dest.id);
+    const topWordPress = activeDestinations.wordpress
+      .sort((a, b) => b.priority - a.priority)
+      .slice(0, 2)
+      .map(dest => dest.id);
+
+    return {
+      shopify: new Set(topShopify),
+      wordpress: new Set(topWordPress),
+    };
+  });
+
+  const [showDestinationModal, setShowDestinationModal] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>({
     isProcessing: false,
     currentStep: '',
@@ -106,11 +177,17 @@ export default function RssManager({ theme }: RssManagerProps) {
     currentItemTitle: '',
   });
 
+  // Connection testing state
+  const [connectionTests, setConnectionTests] = useState<ConnectionTestResult[]>([]);
+  const [testingConnections, setTestingConnections] = useState(false);
+  const [showConnectionStatus, setShowConnectionStatus] = useState(false);
+  const [lastTestTime, setLastTestTime] = useState<string | null>(null);
+
   const loadFeeds = async () => {
     setLoadingFeeds(true);
     try {
       const res = await supabase.from('rss_feeds').select('*');
-      setFeeds(res.data);
+      setFeeds(res.data || []);
     } catch (err) {
       console.error(err);
       setError('Failed to load feed list');
@@ -122,6 +199,164 @@ export default function RssManager({ theme }: RssManagerProps) {
   useEffect(() => {
     loadFeeds();
   }, []);
+
+  // Test connections for selected destinations
+  const testSelectedConnections = async () => {
+    setTestingConnections(true);
+    const results: ConnectionTestResult[] = [];
+
+    try {
+      // Test selected Shopify destinations
+      for (const shopifyId of selectedDestinations.shopify) {
+        const destination = PUBLISHING_DESTINATIONS.shopify.find(d => d.id === shopifyId);
+        if (destination) {
+          const startTime = Date.now();
+          try {
+            const response = await fetch(`https://${destination.shopDomain}/admin/api/2023-10/shop.json`, {
+              headers: {
+                'X-Shopify-Access-Token': destination.accessToken,
+                'Content-Type': 'application/json',
+              },
+              signal: AbortSignal.timeout(10000),
+            });
+
+            const responseTime = Date.now() - startTime;
+
+            if (response.ok) {
+              const data = await response.json();
+              results.push({
+                success: true,
+                destinationId: destination.id,
+                destinationName: destination.name,
+                platform: 'shopify',
+                message: `Connected to ${data.shop.name}`,
+                responseTime,
+                lastTested: new Date().toISOString(),
+              });
+            } else {
+              results.push({
+                success: false,
+                destinationId: destination.id,
+                destinationName: destination.name,
+                platform: 'shopify',
+                message: `Connection failed: HTTP ${response.status}`,
+                responseTime,
+                lastTested: new Date().toISOString(),
+              });
+            }
+          } catch (error) {
+            results.push({
+              success: false,
+              destinationId: destination.id,
+              destinationName: destination.name,
+              platform: 'shopify',
+              message: `Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              responseTime: Date.now() - startTime,
+              lastTested: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
+      // Test selected WordPress destinations
+      for (const wpId of selectedDestinations.wordpress) {
+        const destination = PUBLISHING_DESTINATIONS.wordpress.find(d => d.id === wpId);
+        if (destination) {
+          const startTime = Date.now();
+          try {
+            const wpAuth = Buffer.from(`${destination.username}:${destination.password}`).toString('base64');
+            const baseUrl = destination.apiUrl.replace('/wp/v2/posts', '');
+
+            const response = await fetch(baseUrl, {
+              headers: {
+                'Authorization': `Basic ${wpAuth}`,
+                'Content-Type': 'application/json',
+              },
+              signal: AbortSignal.timeout(10000),
+            });
+
+            const responseTime = Date.now() - startTime;
+
+            if (response.ok) {
+              results.push({
+                success: true,
+                destinationId: destination.id,
+                destinationName: destination.name,
+                platform: 'wordpress',
+                message: 'WordPress connection successful',
+                responseTime,
+                lastTested: new Date().toISOString(),
+              });
+            } else {
+              results.push({
+                success: false,
+                destinationId: destination.id,
+                destinationName: destination.name,
+                platform: 'wordpress',
+                message: `Connection failed: HTTP ${response.status}`,
+                responseTime,
+                lastTested: new Date().toISOString(),
+              });
+            }
+          } catch (error) {
+            results.push({
+              success: false,
+              destinationId: destination.id,
+              destinationName: destination.name,
+              platform: 'wordpress',
+              message: `Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              responseTime: Date.now() - startTime,
+              lastTested: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
+      setConnectionTests(results);
+      setLastTestTime(new Date().toISOString());
+    } catch (err) {
+      console.error('Connection test failed:', err);
+      setError('Failed to test destination connections');
+    } finally {
+      setTestingConnections(false);
+    }
+  };
+
+  // Get connection health status
+  const getConnectionHealth = () => {
+    if (connectionTests.length === 0) {
+      return {
+        status: 'unknown',
+        message: 'No connections tested',
+        color: 'bg-gray-600',
+      };
+    }
+
+    const successCount = connectionTests.filter(r => r.success).length;
+    const successRate = successCount / connectionTests.length;
+
+    if (successRate === 1) {
+      return {
+        status: 'healthy',
+        message: 'All destinations connected',
+        color: 'bg-green-600',
+      };
+    } else if (successRate >= 0.5) {
+      return {
+        status: 'degraded',
+        message: `${successCount}/${connectionTests.length} destinations connected`,
+        color: 'bg-yellow-600',
+      };
+    } else {
+      return {
+        status: 'down',
+        message: `Only ${successCount}/${connectionTests.length} destinations connected`,
+        color: 'bg-red-600',
+      };
+    }
+  };
+
+  const connectionHealth = getConnectionHealth();
 
   // Fetch feed data (without processing)
   const fetchFeedData = async (url: string): Promise<FeedData | null> => {
@@ -136,23 +371,20 @@ export default function RssManager({ theme }: RssManagerProps) {
     }
   };
 
-  // Add feed - now fetches data first, then allows selection
   const addFeed = async () => {
     if (!feedUrl.trim()) return;
     try {
       setError('');
       setLoadingItems(true);
 
-      // First, fetch the feed data to show items
       const feedData = await fetchFeedData(feedUrl.trim());
       if (!feedData) {
         throw new Error('Invalid feed data received');
       }
 
-      // Display the feed data for selection
       setCurrentFeedData(feedData);
       setFeedItems(feedData.items || []);
-      setSelectedItems(new Set()); // Reset selections
+      setSelectedItems(new Set());
       setSelectedFeed(feedUrl.trim());
     } catch (err) {
       console.error(err);
@@ -162,14 +394,65 @@ export default function RssManager({ theme }: RssManagerProps) {
     }
   };
 
-  // Process selected items
+  const toggleDestination = (platform: 'shopify' | 'wordpress', destinationId: string) => {
+    setSelectedDestinations(prev => {
+      const newSet = new Set(prev[platform]);
+      if (newSet.has(destinationId)) {
+        newSet.delete(destinationId);
+      } else {
+        newSet.add(destinationId);
+      }
+      return { ...prev, [platform]: newSet };
+    });
+  };
+
+  const selectAllDestinations = (platform: 'shopify' | 'wordpress') => {
+    const allIds = activeDestinations[platform].map(dest => dest.id);
+    setSelectedDestinations(prev => ({ ...prev, [platform]: new Set(allIds) }));
+  };
+
+  const deselectAllDestinations = (platform: 'shopify' | 'wordpress') => {
+    setSelectedDestinations(prev => ({ ...prev, [platform]: new Set() }));
+  };
+
+  // Get selected destination configurations
+  const getSelectedDestinationConfigs = () => {
+    const shopifyConfigs = PUBLISHING_DESTINATIONS.shopify.filter(dest =>
+      selectedDestinations.shopify.has(dest.id)
+    );
+    const wordpressConfigs = PUBLISHING_DESTINATIONS.wordpress.filter(dest =>
+      selectedDestinations.wordpress.has(dest.id)
+    );
+
+    return { shopify: shopifyConfigs, wordpress: wordpressConfigs };
+  };
+
   const processSelectedItems = async () => {
     if (!currentFeedData || selectedItems.size === 0) {
       setError('Please select at least one item to process');
       return;
     }
 
-    // Use feedUrl or selectedFeed as fallback
+    if (selectedDestinations.shopify.size === 0 && selectedDestinations.wordpress.size === 0) {
+      setError('Please select at least one publishing destination');
+      return;
+    }
+
+    // Check connection health before processing
+    const healthyConnections = connectionTests.filter(test => test.success);
+    const selectedConnectionIds = [
+      ...Array.from(selectedDestinations.shopify),
+      ...Array.from(selectedDestinations.wordpress)
+    ];
+    const healthySelectedConnections = healthyConnections.filter(test =>
+      selectedConnectionIds.includes(test.destinationId)
+    );
+
+    if (healthySelectedConnections.length === 0) {
+      setError('No healthy connections available. Please test connections first.');
+      return;
+    }
+
     const urlToProcess = feedUrl.trim() || selectedFeed;
     if (!urlToProcess) {
       setError('No feed URL available for processing');
@@ -179,15 +462,13 @@ export default function RssManager({ theme }: RssManagerProps) {
     try {
       setError('');
 
-      // Create filtered feed data with only selected items
       const selectedFeedData = {
         ...currentFeedData,
-        items: currentFeedData.items.filter((_, index) =>
-          selectedItems.has(index),
-        ),
+        items: currentFeedData.items.filter((_, index) => selectedItems.has(index)),
       };
 
-      // Start processing
+      const publishingDestinations = getSelectedDestinationConfigs();
+
       setProcessingStatus({
         isProcessing: true,
         currentStep: 'Processing selected RSS items...',
@@ -197,7 +478,6 @@ export default function RssManager({ theme }: RssManagerProps) {
         currentItemTitle: '',
       });
 
-      // Send to backend for processing
       const res = await fetch('/api/rss', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -205,6 +485,7 @@ export default function RssManager({ theme }: RssManagerProps) {
           url: urlToProcess,
           selectedItems: Array.from(selectedItems),
           feedData: selectedFeedData,
+          publishingDestinations,
         }),
       });
 
@@ -212,7 +493,6 @@ export default function RssManager({ theme }: RssManagerProps) {
 
       const result = await res.json();
 
-      // Update processing status with results
       setProcessingStatus({
         isProcessing: false,
         currentStep: 'Completed',
@@ -225,11 +505,13 @@ export default function RssManager({ theme }: RssManagerProps) {
           processed: result.processed,
           humanized: result.humanized,
           skipped: result.skipped,
-          shopifyPosts: result.shopifyPosts,
-          shopifyErrors: result.shopifyErrors,
-          wordpressPosts: result.wordpressPosts || 0,
-          wordpressErrors: result.wordpressErrors || 0,
-          dualSuccess: result.dualSuccess || 0,
+          shopifyPublished: result.shopifyPublished,
+          wordpressPublished: result.wordpressPublished,
+          totalDestinations: result.totalDestinations,
+          destinationResults: result.destinationResults || {
+            shopify: [],
+            wordpress: [],
+          },
           errors: result.errors,
         },
       });
@@ -293,7 +575,7 @@ export default function RssManager({ theme }: RssManagerProps) {
   // Select existing feed
   const selectFeed = async (url: string) => {
     setSelectedFeed(url);
-    setFeedUrl(url); // Fix: Update feedUrl state as well
+    setFeedUrl(url);
     setFeedItems([]);
     setCurrentFeedData(null);
     setSelectedItems(new Set());
@@ -358,6 +640,273 @@ export default function RssManager({ theme }: RssManagerProps) {
     return imgMatch ? imgMatch[1] : null;
   };
 
+  // Connection Status Modal Component
+  const ConnectionStatusModal = () => (
+    <div className='fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4'>
+      <div className='bg-gray-900 rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col'>
+        <div className='flex items-center justify-between p-5 border-b border-gray-800'>
+          <h3 className='text-xl font-semibold text-white flex items-center'>
+            <Activity className='mr-2 h-5 w-5 text-blue-400' />
+            Connection Status
+          </h3>
+          <button
+            onClick={() => setShowConnectionStatus(false)}
+            className='text-gray-400 hover:text-white transition-colors'
+          >
+            <X className='h-5 w-5' />
+          </button>
+        </div>
+
+        <div className='p-5 overflow-y-auto flex-1'>
+          <div className='flex items-center justify-between mb-6'>
+            <div className='flex items-center gap-4'>
+              <div className={`px-3 py-1 rounded-full text-white text-sm ${connectionHealth.color}`}>
+                {connectionHealth.message}
+              </div>
+              {lastTestTime && (
+                <span className='text-gray-400 text-sm'>
+                  Last tested: {formatDate(lastTestTime)}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={testSelectedConnections}
+              disabled={testingConnections}
+              className='flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50'
+            >
+              {testingConnections ? (
+                <Loader2 className='h-4 w-4 mr-2 animate-spin' />
+              ) : (
+                <RefreshCw className='h-4 w-4 mr-2' />
+              )}
+              Test Connections
+            </button>
+          </div>
+
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            {connectionTests.map((test) => (
+              <div
+                key={test.destinationId}
+                className={`p-4 rounded-lg border-2 ${test.success
+                  ? 'border-green-500 bg-green-500/10'
+                  : 'border-red-500 bg-red-500/10'
+                  }`}
+              >
+                <div className='flex items-start justify-between mb-2'>
+                  <div className='flex items-center gap-2'>
+                    {test.platform === 'shopify' ? (
+                      <Store className='h-4 w-4 text-green-400' />
+                    ) : (
+                      <Database className='h-4 w-4 text-blue-400' />
+                    )}
+                    <h4 className='font-medium text-white'>{test.destinationName}</h4>
+                  </div>
+                  {test.success ? (
+                    <CheckCircle2 className='h-5 w-5 text-green-500' />
+                  ) : (
+                    <X className='h-5 w-5 text-red-500' />
+                  )}
+                </div>
+                <p className={`text-sm ${test.success ? 'text-green-300' : 'text-red-300'}`}>
+                  {test.message}
+                </p>
+                {test.responseTime && (
+                  <p className='text-xs text-gray-400 mt-1'>
+                    Response time: {test.responseTime}ms
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {connectionTests.length === 0 && (
+            <div className='text-center py-8'>
+              <Activity className='h-8 w-8 mx-auto mb-4 text-gray-600' />
+              <p className='text-gray-400'>No connection tests performed yet</p>
+              <button
+                onClick={testSelectedConnections}
+                className='mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors'
+              >
+                Test Selected Destinations
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className='p-4 border-t border-gray-800 flex justify-end'>
+          <button
+            onClick={() => setShowConnectionStatus(false)}
+            className='px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors'
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Destination Selection Modal Component
+  const DestinationSelectionModal = () => (
+    <div className='fixed h-screen inset-0 bg-black/70 flex items-center justify-center z-50 p-4'>
+      <div className='bg-gray-900 rounded-xl shadow-2xl max-w-6xl w-full max-h-[80vh] overflow-hidden flex flex-col'>
+        <div className='flex items-center justify-between p-5 border-b border-gray-800'>
+          <h3 className='text-xl font-semibold text-white flex items-center'>
+            <Target className='mr-2 h-5 w-5 text-blue-400' />
+            Select Publishing Destinations
+          </h3>
+          <button
+            onClick={() => setShowDestinationModal(false)}
+            className='text-gray-400 hover:text-white transition-colors'
+          >
+            <X className='h-5 w-5' />
+          </button>
+        </div>
+
+        <div className='p-5 overflow-y-auto flex-1'>
+          {/* Shopify Destinations */}
+          <div className='mb-8'>
+            <div className='flex items-center justify-between mb-4'>
+              <h4 className='text-lg font-medium text-white flex items-center'>
+                <Store className='mr-2 h-5 w-5 text-green-400' />
+                Shopify Stores ({selectedDestinations.shopify.size}/{activeDestinations.shopify.length})
+              </h4>
+              <div className='flex gap-2'>
+                <button
+                  onClick={() => selectAllDestinations('shopify')}
+                  className='px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors'
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={() => deselectAllDestinations('shopify')}
+                  className='px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors'
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
+              {activeDestinations.shopify.map((destination) => {
+                const isSelected = selectedDestinations.shopify.has(destination.id);
+                return (
+                  <div
+                    key={destination.id}
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${isSelected
+                      ? 'border-green-500 bg-green-500/10'
+                      : 'border-gray-700 hover:border-gray-600'
+                      }`}
+                    onClick={() => toggleDestination('shopify', destination.id)}
+                  >
+                    <div className='flex items-start justify-between mb-2'>
+                      <div className='flex items-center gap-2'>
+                        <div className={`w-3 h-3 rounded-full ${destination.color} flex-shrink-0`}></div>
+                        <span className='text-xs bg-gray-700 px-2 py-1 rounded'>
+                          Priority: {destination.priority}
+                        </span>
+                      </div>
+                      {isSelected ? (
+                        <CheckCircle2 className='h-5 w-5 text-green-500' />
+                      ) : (
+                        <div className='h-5 w-5 border-2 border-gray-400 rounded'></div>
+                      )}
+                    </div>
+                    <h5 className='font-medium text-white mb-1'>{destination.name}</h5>
+                    <p className='text-sm text-gray-400 mb-2'>{destination.description}</p>
+                    <p className='text-xs text-gray-500 font-mono truncate'>{destination.shopDomain}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* WordPress Destinations */}
+          <div>
+            <div className='flex items-center justify-between mb-4'>
+              <h4 className='text-lg font-medium text-white flex items-center'>
+                <Database className='mr-2 h-5 w-5 text-blue-400' />
+                WordPress Sites ({selectedDestinations.wordpress.size}/{activeDestinations.wordpress.length})
+              </h4>
+              <div className='flex gap-2'>
+                <button
+                  onClick={() => selectAllDestinations('wordpress')}
+                  className='px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors'
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={() => deselectAllDestinations('wordpress')}
+                  className='px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors'
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
+              {activeDestinations.wordpress.map((destination) => {
+                const isSelected = selectedDestinations.wordpress.has(destination.id);
+                return (
+                  <div
+                    key={destination.id}
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${isSelected
+                      ? 'border-blue-500 bg-blue-500/10'
+                      : 'border-gray-700 hover:border-gray-600'
+                      }`}
+                    onClick={() => toggleDestination('wordpress', destination.id)}
+                  >
+                    <div className='flex items-start justify-between mb-2'>
+                      <div className='flex items-center gap-2'>
+                        <div className={`w-3 h-3 rounded-full ${destination.color} flex-shrink-0`}></div>
+                        <span className='text-xs bg-gray-700 px-2 py-1 rounded'>
+                          Priority: {destination.priority}
+                        </span>
+                      </div>
+                      {isSelected ? (
+                        <CheckCircle2 className='h-5 w-5 text-blue-500' />
+                      ) : (
+                        <div className='h-5 w-5 border-2 border-gray-400 rounded'></div>
+                      )}
+                    </div>
+                    <h5 className='font-medium text-white mb-1'>{destination.name}</h5>
+                    <p className='text-sm text-gray-400 mb-2'>{destination.description}</p>
+                    <p className='text-xs text-gray-500 font-mono truncate'>
+                      {new URL(destination.apiUrl).hostname}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className='p-4 border-t border-gray-800 flex justify-between items-center'>
+          <div className='text-sm text-gray-400'>
+            Total selected: {selectedDestinations.shopify.size + selectedDestinations.wordpress.size} destinations
+          </div>
+          <div className='flex gap-3'>
+            <button
+              onClick={() => setShowDestinationModal(false)}
+              className='px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors'
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                setShowDestinationModal(false);
+                // Automatically test connections when destinations are changed
+                setTimeout(() => testSelectedConnections(), 500);
+              }}
+              className='px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors'
+            >
+              Save & Test Connections
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const ProcessingProgressUI = () => {
     const { isProcessing, currentStep, results } = processingStatus;
 
@@ -365,10 +914,10 @@ export default function RssManager({ theme }: RssManagerProps) {
 
     return (
       <div className='fixed top-0 h-screen w-screen inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-6'>
-        <div className='bg-gray-900 rounded-xl shadow-2xl max-w-md w-full p-6 border border-gray-800'>
+        <div className='bg-gray-900 rounded-xl shadow-2xl max-w-3xl w-full p-6 border border-gray-800'>
           <h3 className='text-xl font-semibold text-white mb-4 flex items-center'>
             <Rss className='mr-2 h-5 w-5 text-blue-400' />
-            Processing RSS Feed
+            Processing RSS Feed with Multi-Destination Publishing
           </h3>
 
           {isProcessing ? (
@@ -380,11 +929,11 @@ export default function RssManager({ theme }: RssManagerProps) {
               </div>
               <div className='flex items-center text-gray-400'>
                 <Loader2 className='h-4 w-4 mr-2 animate-spin' />
-                <span>Please wait while we process your selected items...</span>
+                <span>Publishing to {selectedDestinations.shopify.size + selectedDestinations.wordpress.size} destinations...</span>
               </div>
             </div>
           ) : results ? (
-            <div className='space-y-4'>
+            <div className='space-y-6'>
               <div className='bg-green-900/30 border border-green-800 text-green-400 px-4 py-3 rounded-lg text-sm flex items-center'>
                 <CheckCircle2 className='h-5 w-5 mr-2' />
                 <div>
@@ -392,12 +941,12 @@ export default function RssManager({ theme }: RssManagerProps) {
                     Processing completed successfully!
                   </div>
                   <div className='text-xs text-green-300 mt-1'>
-                    Content published to Shopify and WordPress
+                    Content published to {results.totalDestinations} destinations
                   </div>
                 </div>
               </div>
 
-              <div className='grid grid-cols-2 md:grid-cols-3 gap-3 text-sm'>
+              <div className='grid grid-cols-2 md:grid-cols-4 gap-3 text-sm'>
                 <div className='text-center p-3 bg-blue-900/20 rounded-lg'>
                   <div className='text-xl font-bold text-blue-400'>
                     {results.total}
@@ -410,45 +959,62 @@ export default function RssManager({ theme }: RssManagerProps) {
                   </div>
                   <div className='text-green-300 text-xs'>Humanized</div>
                 </div>
-                <div className='text-center p-3 bg-gray-800/50 rounded-lg'>
-                  <div className='text-xl font-bold text-gray-400'>
-                    {results.skipped}
-                  </div>
-                  <div className='text-gray-300 text-xs'>Skipped</div>
-                </div>
                 <div className='text-center p-3 bg-purple-900/20 rounded-lg'>
                   <div className='text-xl font-bold text-purple-400'>
-                    {results.shopifyPosts || 0}
+                    {results.shopifyPublished}
                   </div>
-                  <div className='text-purple-300 text-xs'>Shopify Posts</div>
+                  <div className='text-purple-300 text-xs'>Shopify</div>
                 </div>
                 <div className='text-center p-3 bg-orange-900/20 rounded-lg'>
                   <div className='text-xl font-bold text-orange-400'>
-                    {results.wordpressPosts || 0}
+                    {results.wordpressPublished}
                   </div>
-                  <div className='text-orange-300 text-xs'>WordPress Posts</div>
-                </div>
-                <div className='text-center p-3 bg-cyan-900/20 rounded-lg'>
-                  <div className='text-xl font-bold text-cyan-400'>
-                    {results.dualSuccess || 0}
-                  </div>
-                  <div className='text-cyan-300 text-xs'>Both Platforms</div>
+                  <div className='text-orange-300 text-xs'>WordPress</div>
                 </div>
               </div>
 
-              {(results.shopifyErrors > 0 || results.wordpressErrors > 0) && (
-                <div className='mt-4 p-3 bg-red-900/20 border border-red-800 rounded-lg text-sm'>
-                  <div className='text-red-400 font-medium mb-2'>
-                    Publishing Errors:
-                  </div>
-                  <div className='flex gap-4 text-xs text-red-300'>
-                    {results.shopifyErrors > 0 && (
-                      <span>Shopify: {results.shopifyErrors} failed</span>
-                    )}
-                    {results.wordpressErrors > 0 && (
-                      <span>WordPress: {results.wordpressErrors} failed</span>
-                    )}
-                  </div>
+              {/* Detailed destination results */}
+              {(results.destinationResults.shopify.length > 0 || results.destinationResults.wordpress.length > 0) && (
+                <div className='bg-gray-800/50 rounded-lg p-4'>
+                  <h4 className='font-medium text-white mb-3'>Destination Results</h4>
+
+                  {results.destinationResults.shopify.length > 0 && (
+                    <div className='mb-4'>
+                      <h5 className='text-sm font-medium text-green-400 mb-2 flex items-center'>
+                        <Store className='h-4 w-4 mr-1' />
+                        Shopify Stores
+                      </h5>
+                      <div className='space-y-1'>
+                        {results.destinationResults.shopify.map((dest, index) => (
+                          <div key={index} className='flex justify-between text-xs'>
+                            <span className='text-gray-300'>{dest.name}</span>
+                            <span className='text-green-400'>
+                              ✓ {dest.published} published {dest.errors > 0 && `• ${dest.errors} errors`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {results.destinationResults.wordpress.length > 0 && (
+                    <div>
+                      <h5 className='text-sm font-medium text-blue-400 mb-2 flex items-center'>
+                        <Database className='h-4 w-4 mr-1' />
+                        WordPress Sites
+                      </h5>
+                      <div className='space-y-1'>
+                        {results.destinationResults.wordpress.map((dest, index) => (
+                          <div key={index} className='flex justify-between text-xs'>
+                            <span className='text-gray-300'>{dest.name}</span>
+                            <span className='text-blue-400'>
+                              ✓ {dest.published} published {dest.errors > 0 && `• ${dest.errors} errors`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -479,15 +1045,109 @@ export default function RssManager({ theme }: RssManagerProps) {
       {/* Processing Progress UI */}
       <ProcessingProgressUI />
 
+      {/* Destination Selection Modal */}
+      {showDestinationModal && <DestinationSelectionModal />}
+
+      {/* Connection Status Modal */}
+      {showConnectionStatus && <ConnectionStatusModal />}
+
       <div className='container mx-auto p-4'>
         <header className='mb-8'>
           <h1 className='text-3xl font-bold text-white mb-2'>
             RSS Feed Manager
           </h1>
           <p className='text-gray-400'>
-            Fetch RSS feeds and select which items to humanize and publish
+            Fetch RSS feeds and publish to multiple Shopify stores and WordPress sites
           </p>
         </header>
+
+        {/* Publishing Destinations Summary */}
+        <div className='bg-gray-900 rounded-xl p-5 shadow-lg mb-6'>
+          <div className='flex items-center justify-between mb-4'>
+            <h2 className='text-xl font-semibold flex items-center'>
+              <Target className='mr-2 h-5 w-5 text-blue-400' />
+              Publishing Destinations
+            </h2>
+            <div className='flex gap-2'>
+              <button
+                onClick={() => setShowConnectionStatus(true)}
+                className={`flex items-center px-3 py-2 text-white rounded-lg transition-colors text-sm ${connectionHealth.color}`}
+              >
+                {connectionHealth.status === 'healthy' ? (
+                  <Wifi className='h-4 w-4 mr-2' />
+                ) : connectionHealth.status === 'degraded' ? (
+                  <AlertTriangle className='h-4 w-4 mr-2' />
+                ) : (
+                  <WifiOff className='h-4 w-4 mr-2' />
+                )}
+                {connectionHealth.message}
+              </button>
+              <button
+                onClick={() => setShowDestinationModal(true)}
+                className='flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors'
+              >
+                <Settings className='h-4 w-4 mr-2' />
+                Configure
+              </button>
+            </div>
+          </div>
+
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            <div className='bg-green-900/20 border border-green-800 rounded-lg p-4'>
+              <h3 className='text-green-400 font-medium mb-3 flex items-center'>
+                <Store className='h-4 w-4 mr-2' />
+                Shopify Stores ({selectedDestinations.shopify.size})
+              </h3>
+              <div className='space-y-2'>
+                {Array.from(selectedDestinations.shopify).map(destId => {
+                  const dest = PUBLISHING_DESTINATIONS.shopify.find(d => d.id === destId);
+                  const testResult = connectionTests.find(t => t.destinationId === destId);
+                  return dest ? (
+                    <div key={destId} className='text-sm text-green-300 flex items-center justify-between'>
+                      <div className='flex items-center'>
+                        <div className={`w-2 h-2 rounded-full ${dest.color} mr-2`}></div>
+                        {dest.name}
+                      </div>
+                      {testResult && (
+                        <div className={`w-2 h-2 rounded-full ${testResult.success ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                      )}
+                    </div>
+                  ) : null;
+                })}
+                {selectedDestinations.shopify.size === 0 && (
+                  <div className='text-sm text-gray-500'>None selected</div>
+                )}
+              </div>
+            </div>
+
+            <div className='bg-blue-900/20 border border-blue-800 rounded-lg p-4'>
+              <h3 className='text-blue-400 font-medium mb-3 flex items-center'>
+                <Database className='h-4 w-4 mr-2' />
+                WordPress Sites ({selectedDestinations.wordpress.size})
+              </h3>
+              <div className='space-y-2'>
+                {Array.from(selectedDestinations.wordpress).map(destId => {
+                  const dest = PUBLISHING_DESTINATIONS.wordpress.find(d => d.id === destId);
+                  const testResult = connectionTests.find(t => t.destinationId === destId);
+                  return dest ? (
+                    <div key={destId} className='text-sm text-blue-300 flex items-center justify-between'>
+                      <div className='flex items-center'>
+                        <div className={`w-2 h-2 rounded-full ${dest.color} mr-2`}></div>
+                        {dest.name}
+                      </div>
+                      {testResult && (
+                        <div className={`w-2 h-2 rounded-full ${testResult.success ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                      )}
+                    </div>
+                  ) : null;
+                })}
+                {selectedDestinations.wordpress.size === 0 && (
+                  <div className='text-sm text-gray-500'>None selected</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
           {/* Left column - Feed management */}
@@ -519,9 +1179,13 @@ export default function RssManager({ theme }: RssManagerProps) {
                   <button
                     onClick={processSelectedItems}
                     disabled={
-                      processingStatus.isProcessing || selectedItems.size === 0
+                      processingStatus.isProcessing ||
+                      selectedItems.size === 0 ||
+                      (selectedDestinations.shopify.size === 0 && selectedDestinations.wordpress.size === 0)
                     }
-                    className={`w-full bg-green-600 text-white font-medium rounded-lg py-3 px-4 flex items-center justify-center transition-all duration-200 ${processingStatus.isProcessing || selectedItems.size === 0
+                    className={`w-full bg-green-600 text-white font-medium rounded-lg py-3 px-4 flex items-center justify-center transition-all duration-200 ${processingStatus.isProcessing ||
+                      selectedItems.size === 0 ||
+                      (selectedDestinations.shopify.size === 0 && selectedDestinations.wordpress.size === 0)
                       ? 'opacity-60 cursor-not-allowed'
                       : 'hover:bg-green-700'
                       }`}
@@ -532,7 +1196,10 @@ export default function RssManager({ theme }: RssManagerProps) {
                         Processing...
                       </>
                     ) : (
-                      <>Process Selected ({selectedItems.size})</>
+                      <>
+                        <Zap className='h-4 w-4 mr-2' />
+                        Process {selectedItems.size} items → {selectedDestinations.shopify.size + selectedDestinations.wordpress.size} destinations
+                      </>
                     )}
                   </button>
                 ) : (
@@ -851,7 +1518,7 @@ export default function RssManager({ theme }: RssManagerProps) {
                 </h2>
                 <p className='text-gray-500 max-w-md mx-auto mb-6'>
                   Enter an RSS feed URL above to get started, or select an
-                  existing feed from the sidebar
+                  existing feed from the sidebar. Configure your publishing destinations and start automating your content workflow.
                 </p>
               </div>
             )}
