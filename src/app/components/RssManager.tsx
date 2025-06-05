@@ -33,7 +33,19 @@ import supabase from '@/lib/supabaseClient';
 
 // HARDCODED PUBLISHING DESTINATIONS - Update these with your actual credentials
 const PUBLISHING_DESTINATIONS = {
-  shopify: [],
+  shopify: [
+    {
+      id: 'shopify-1',
+      name: 'Main Store',
+      shopDomain: '6vj1n3-x1.myshopify.com',
+      accessToken: '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',
+      description: 'Primary e-commerce store',
+      color: 'bg-green-600',
+      isActive: true,
+      priority: 10,
+      defaultAuthor: 'Blog Bot',
+    },
+  ],
   wordpress: [
     {
       id: 'wp-1',
