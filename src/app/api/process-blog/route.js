@@ -239,7 +239,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
 
     const wpPayload = {
       title: title,
-      content: htmlContent,
+      content: htmlContent.replace("title"),
       status: wpConfig.defaultStatus || 'publish',
       excerpt: excerpt,
       author: 1,
