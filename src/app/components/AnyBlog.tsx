@@ -27,10 +27,21 @@ const PUBLISHING_DESTINATIONS = {
   shopify: [
     {
       id: 'shopify-1',
-      name: 'Main Store',
+      name: 'Escapade',
       shopDomain: '6vj1n3-x1.myshopify.com',
       accessToken: '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',
-      description: 'Primary e-commerce store',
+      description: 'Escapade',
+      color: 'bg-green-600',
+      isActive: true,
+      priority: 10,
+      defaultAuthor: 'Blog Bot',
+    },
+    {
+      id: 'shopify-2',
+      name: 'Celebrary Fashion VIP',
+      shopDomain: 'd0595d.myshopify.com',
+      accessToken: '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',
+      description: 'Celebrary Fashion VIP',
       color: 'bg-green-600',
       isActive: true,
       priority: 10,
@@ -882,8 +893,8 @@ const BlogHumanizerUI = () => {
                             <div
                               key={category.id}
                               className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${isSelected
-                                  ? 'border-blue-500 bg-blue-500/10'
-                                  : 'border-gray-700 hover:border-gray-600'
+                                ? 'border-blue-500 bg-blue-500/10'
+                                : 'border-gray-700 hover:border-gray-600'
                                 }`}
                               onClick={() => toggleCategory(destId, category.id)}
                             >
