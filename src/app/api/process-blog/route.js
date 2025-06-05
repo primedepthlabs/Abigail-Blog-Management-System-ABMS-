@@ -216,8 +216,8 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyCo
   }
 }
 
-// WORDPRESS FUNCTIONS - Dynamic configuration
-async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfig) {
+// WORDPRESS FUNCTIONS - Dynamic configuration with categories support
+async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfig, selectedCategories = []) {
   try {
     const title = extractTitle(humanizedMarkdown);
     const htmlContent = markdownToHtml(humanizedMarkdown);
@@ -237,13 +237,31 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
 
     const wpAuth = Buffer.from(`${wpConfig.username}:${wpConfig.password}`).toString('base64');
 
+    // Determine categories to use
+    let categoriesToUse = [];
+
+    // Priority order:
+    // 1. Selected categories from frontend
+    // 2. Default category from wpConfig
+    // 3. Category ID 1 (Uncategorized)
+    if (selectedCategories && selectedCategories.length > 0) {
+      categoriesToUse = selectedCategories;
+      logger.info(`Using selected categories for ${wpConfig.name}:`, selectedCategories);
+    } else if (wpConfig.defaultCategory) {
+      categoriesToUse = [wpConfig.defaultCategory];
+      logger.info(`Using default category for ${wpConfig.name}:`, [wpConfig.defaultCategory]);
+    } else {
+      categoriesToUse = [1]; // Default to "Uncategorized"
+      logger.info(`Using fallback category for ${wpConfig.name}:`, [1]);
+    }
+
     const wpPayload = {
       title: title,
       content: htmlContent.replace("title"),
       status: wpConfig.defaultStatus || 'publish',
       excerpt: excerpt,
       author: 1,
-      categories: wpConfig.defaultCategory ? [wpConfig.defaultCategory] : [1],
+      categories: categoriesToUse,
       tags: wpConfig.tags || [],
       meta: {
         _wp_original_source: blogData.url || '',
@@ -251,6 +269,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
         _wp_publication_date: blogData.pubDate || new Date().toISOString(),
         _wp_rss_source: 'Auto-Generated from Single Blog URL',
         _wp_destination: wpConfig.name,
+        _wp_selected_categories: selectedCategories, // Store selected categories for reference
       },
     };
 
@@ -258,6 +277,15 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
     if (blogData.images && blogData.images.length > 0) {
       wpPayload.featured_media_url = blogData.images[0].url;
     }
+
+    logger.info(`WordPress payload created for ${wpConfig.name}`, {
+      title: wpPayload.title,
+      contentLength: wpPayload.content?.length || 0,
+      status: wpPayload.status,
+      categories: categoriesToUse,
+      categoriesCount: categoriesToUse.length,
+      originalSource: blogData.url,
+    });
 
     const wpRes = await fetch(wpConfig.apiUrl, {
       method: 'POST',
@@ -275,6 +303,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
         status: wpRes.status,
         statusText: wpRes.statusText,
         response: wpData,
+        categories: categoriesToUse,
       });
 
       return {
@@ -284,12 +313,15 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
         destinationId: wpConfig.id,
         error: wpData.message || `WordPress API error: ${wpRes.status}`,
         publishedAt: new Date().toISOString(),
+        categoriesUsed: categoriesToUse,
       };
     }
 
     logger.success(`Successfully published to WordPress ${wpConfig.name}`, {
       wp_post_id: wpData.id,
       wp_url: wpData.link || 'N/A',
+      categories: categoriesToUse,
+      categoriesAssigned: wpData.categories || [],
     });
 
     return {
@@ -302,6 +334,8 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
       url: wpData.link,
       slug: wpData.slug,
       publishedAt: new Date().toISOString(),
+      categoriesUsed: categoriesToUse,
+      categoriesAssigned: wpData.categories || [],
     };
   } catch (error) {
     logger.error(`Failed to create WordPress blog post on ${wpConfig.name}:`, error);
@@ -312,6 +346,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
       destinationId: wpConfig.id,
       error: error.message,
       publishedAt: new Date().toISOString(),
+      categoriesUsed: selectedCategories || [],
     };
   }
 }
@@ -559,8 +594,8 @@ function distributeImagesInContent(contentText, images) {
   return result.trim();
 }
 
-// UPDATED Main processing function with multi-destination publishing
-async function processSingleBlog(blogUrl, publishingDestinations) {
+// UPDATED Main processing function with multi-destination publishing and categories support
+async function processSingleBlog(blogUrl, publishingDestinations, wordpressCategories = {}) {
   try {
     logger.info(`Processing single blog URL with DeepSeek: ${blogUrl}`);
     logger.info(`Publishing to: ${publishingDestinations.shopify?.length || 0} Shopify stores, ${publishingDestinations.wordpress?.length || 0} WordPress sites`);
@@ -776,24 +811,6 @@ Return ONLY the complete markdown blog content with images with proper blog form
     // 6. Humanize with DeepSeek
     let humanizedBlogMarkdown = enhancedBlogMarkdown.replaceAll('```', '').replaceAll('markdown\n', '');
 
-    //     try {
-    //       logger.info('Using DeepSeek for humanization');
-
-    //       const humanizePrompt = `
-    // Improve this blog post markdown to make it more engaging, conversational, and human-sounding while keeping the same structure and information:
-
-    // ${enhancedBlogMarkdown}
-
-    // Make it sound more natural and less AI-generated. Use varied sentence structures, add personality, and make it flow better while maintaining all the technical accuracy and information. Only return the improved markdown, nothing else.`;
-
-    //       const humanizeRes = await callDeepSeekWithRetry([{ role: 'user', content: humanizePrompt }], 10000, 0.7);
-    //       humanizedBlogMarkdown = humanizeRes.choices[0]?.message?.content || enhancedBlogMarkdown;
-    //       logger.success('DeepSeek humanization successful');
-    //     } catch (humanizeError) {
-    //       logger.error('DeepSeek humanization failed:', humanizeError.message);
-    //       humanizedBlogMarkdown = enhancedBlogMarkdown;
-    //     }
-
     // 7. Save to database
     const { data: humanizeData, error: humanizeError } = await supabase
       .from('Humanize_Data')
@@ -810,7 +827,7 @@ Return ONLY the complete markdown blog content with images with proper blog form
 
     const humanizeDataId = humanizeData[0].id;
 
-    // 8. MULTI-DESTINATION PUBLISHING
+    // 8. MULTI-DESTINATION PUBLISHING WITH CATEGORIES
     logger.info(
       `Publishing to ${publishingDestinations.shopify.length} Shopify stores and ${publishingDestinations.wordpress.length} WordPress sites`,
     );
@@ -829,11 +846,12 @@ Return ONLY the complete markdown blog content with images with proper blog form
       publishingResults.shopify = shopifyResults;
     }
 
-    // Publish to all selected WordPress sites in parallel
+    // Publish to all selected WordPress sites in parallel with categories
     if (publishingDestinations.wordpress.length > 0) {
-      const wpPromises = publishingDestinations.wordpress.map(wpConfig =>
-        createWordPressBlogPost(humanizedBlogMarkdown, blogData, wpConfig)
-      );
+      const wpPromises = publishingDestinations.wordpress.map(wpConfig => {
+        const selectedCategoriesForDestination = wordpressCategories[wpConfig.id] || [];
+        return createWordPressBlogPost(humanizedBlogMarkdown, blogData, wpConfig, selectedCategoriesForDestination);
+      });
       const wpResults = await Promise.all(wpPromises);
       publishingResults.wordpress = wpResults;
     }
@@ -1061,7 +1079,7 @@ export async function GET(req) {
   }
 }
 
-// POST endpoint - Process a single blog URL with multi-destination support
+// POST endpoint - Process a single blog URL with multi-destination support and categories
 export async function POST(req) {
   try {
     console.log('🔍 POST endpoint hit for DeepSeek multi-destination processing');
@@ -1081,12 +1099,13 @@ export async function POST(req) {
       );
     }
 
-    const { url, action, publishingDestinations } = requestBody;
+    const { url, action, publishingDestinations, wordpressCategories } = requestBody;
 
     console.log('🔍 Extracted values:');
     console.log('  - URL:', url);
     console.log('  - Action:', action);
     console.log('  - Publishing Destinations:', publishingDestinations);
+    console.log('  - WordPress Categories:', wordpressCategories);
 
     if (!url || typeof url !== 'string' || !url.trim()) {
       console.log('❌ URL validation failed');
@@ -1139,7 +1158,7 @@ export async function POST(req) {
 
     logger.info(`Processing blog request with DeepSeek for: ${url}`);
 
-    const result = await processSingleBlog(url, publishingDestinations);
+    const result = await processSingleBlog(url, publishingDestinations, wordpressCategories);
 
     return new Response(JSON.stringify(result), {
       status: 200,

@@ -185,7 +185,7 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyCo
 }
 
 // WORDPRESS FUNCTIONS - Dynamic configuration
-async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfig) {
+async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfig, selectedCategories = []) {
   try {
     const title = extractTitle(humanizedMarkdown);
     const htmlContent = markdownToHtml(humanizedMarkdown);
@@ -206,13 +206,31 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
 
     const wpAuth = Buffer.from(`${wpConfig.username}:${wpConfig.password}`).toString('base64');
 
+    // Determine categories to use
+    let categoriesToUse = [];
+
+    // Priority order:
+    // 1. Selected categories from frontend
+    // 2. Default category from wpConfig
+    // 3. Category ID 1 (Uncategorized)
+    if (selectedCategories && selectedCategories.length > 0) {
+      categoriesToUse = selectedCategories;
+      logger.info(`Using selected categories for ${wpConfig.name}:`, selectedCategories);
+    } else if (wpConfig.defaultCategory) {
+      categoriesToUse = [wpConfig.defaultCategory];
+      logger.info(`Using default category for ${wpConfig.name}:`, [wpConfig.defaultCategory]);
+    } else {
+      categoriesToUse = [1]; // Default to "Uncategorized"
+      logger.info(`Using fallback category for ${wpConfig.name}:`, [1]);
+    }
+
     const wpPayload = {
       title: title,
-      content: htmlContent,
+      content: htmlContent.replace(title, ''),
       status: wpConfig.defaultStatus || 'publish',
       excerpt: excerpt,
       author: 1, // Default author ID
-      categories: wpConfig.defaultCategory ? [wpConfig.defaultCategory] : [1],
+      categories: categoriesToUse,
       tags: wpConfig.tags || [],
       meta: {
         _wp_original_source: blogData.url || '',
@@ -220,6 +238,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
         _wp_publication_date: blogData.pubDate || new Date().toISOString(),
         _wp_rss_source: 'Auto-Generated from RSS Feed',
         _wp_destination: wpConfig.name,
+        _wp_selected_categories: selectedCategories, // Store selected categories for reference
       },
     };
 
@@ -227,6 +246,8 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
       title: wpPayload.title,
       contentLength: wpPayload.content?.length || 0,
       status: wpPayload.status,
+      categories: categoriesToUse,
+      categoriesCount: categoriesToUse.length,
       originalSource: blogData.url,
     });
 
@@ -246,6 +267,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
         status: wpRes.status,
         statusText: wpRes.statusText,
         response: wpData,
+        categories: categoriesToUse,
       });
 
       return {
@@ -255,12 +277,15 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
         destinationId: wpConfig.id,
         error: wpData.message || `WordPress API error: ${wpRes.status}`,
         publishedAt: new Date().toISOString(),
+        categoriesUsed: categoriesToUse,
       };
     }
 
     logger.success(`Successfully published to WordPress ${wpConfig.name}`, {
       wp_post_id: wpData.id,
       wp_url: wpData.link || 'N/A',
+      categories: categoriesToUse,
+      categoriesAssigned: wpData.categories || [],
     });
 
     return {
@@ -273,6 +298,8 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
       url: wpData.link,
       slug: wpData.slug,
       publishedAt: new Date().toISOString(),
+      categoriesUsed: categoriesToUse,
+      categoriesAssigned: wpData.categories || [],
     };
   } catch (error) {
     logger.error(`Failed to create WordPress blog post on ${wpConfig.name}:`, error);
@@ -283,6 +310,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
       destinationId: wpConfig.id,
       error: error.message,
       publishedAt: new Date().toISOString(),
+      categoriesUsed: selectedCategories || [],
     };
   }
 }
@@ -393,6 +421,7 @@ async function processItem(
   feedId,
   publishingDestinations,
   shouldHumanize = true,
+  wordpressCategories = {}
 ) {
   try {
     if (!item.link) {
@@ -937,9 +966,10 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
 
     // Publish to all selected WordPress sites in parallel
     if (publishingDestinations.wordpress.length > 0) {
-      const wpPromises = publishingDestinations.wordpress.map(wpConfig =>
-        createWordPressBlogPost(humanizedBlogMarkdown, blogData, wpConfig)
-      );
+      const wpPromises = publishingDestinations.wordpress.map(wpConfig => {
+        const selectedCategoriesForDestination = wordpressCategories[wpConfig.id] || [];
+        return createWordPressBlogPost(humanizedBlogMarkdown, blogData, wpConfig, selectedCategoriesForDestination);
+      });
       const wpResults = await Promise.all(wpPromises);
       publishingResults.wordpress = wpResults;
     }
@@ -996,7 +1026,7 @@ Return ONLY the markdown blog content, with no extra commentary. It should be re
 }
 
 // Process and humanize feed content with multi-destination publishing
-async function processFeedContent(feedData, feedId, publishingDestinations, selectedIndices = null) {
+async function processFeedContent(feedData, feedId, publishingDestinations, selectedIndices = null, wordpressCategories = {}) {
   const results = {
     total: feedData.items.length,
     processed: 0,
@@ -1034,7 +1064,7 @@ async function processFeedContent(feedData, feedId, publishingDestinations, sele
   // Create an array of promises for each item
   const processingPromises = feedData.items.map((item, index) => {
     const shouldHumanize = selectedIndices ? selectedIndices.includes(index) : true;
-    return processItem(item, index, feedData.items.length, feedId, publishingDestinations, shouldHumanize);
+    return processItem(item, index, feedData.items.length, feedId, publishingDestinations, shouldHumanize, wordpressCategories);
   });
 
   // Execute all promises in parallel
@@ -1435,7 +1465,7 @@ export async function GET(req) {
 // POST function with multi-destination support
 export async function POST(req) {
   try {
-    const { url, selectedItems, feedData, publishingDestinations } = await req.json();
+    const { url, selectedItems, feedData, publishingDestinations, wordpressCategories } = await req.json();
 
     if (!url || typeof url !== 'string' || !url.trim()) {
       throw new Error('Invalid or missing URL');
@@ -1525,6 +1555,7 @@ export async function POST(req) {
       feedId,
       publishingDestinations,
       selectedItems,
+      wordpressCategories
     );
 
     // 4. Return success response with multi-destination stats
