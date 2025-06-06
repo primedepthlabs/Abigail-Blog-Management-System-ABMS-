@@ -766,6 +766,7 @@ ${blogData.images.length > 0
         ? '8. Use proper markdown image syntax: ![alt text](image_url "optional title")'
         : ''
       }
+ADD Humanization so that the text looks it is written by a human and not AI generated
 
 IMPORTANT: 
 - Use the ENTIRE content provided. Do not summarize or truncate.

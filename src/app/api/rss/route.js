@@ -838,6 +838,7 @@ You are a professional blog content creator. Your task is to create a high-quali
 Here's the detailed blog content data:
 ${rawItemJSON}
 
+ADD Humanization so that the text looks it is written by a human and not AI generated
 INSTRUCTIONS:
 1. Create a polished, engaging blog post in markdown format
 2. Include a compelling title that captures attention (H1 format)
