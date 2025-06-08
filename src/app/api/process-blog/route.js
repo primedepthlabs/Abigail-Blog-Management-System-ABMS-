@@ -257,7 +257,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
 
     const wpPayload = {
       title: title,
-      content: htmlContent.replace("title"),
+      content: htmlContent.replaceAll(title, ''),
       status: wpConfig.defaultStatus || 'publish',
       excerpt: excerpt,
       author: 1,
@@ -775,6 +775,7 @@ IMPORTANT:
 - Images should enhance and complement the text they appear near
 - Create the Blog text properly formatted in blog style with proper PARAGRAPHS and lines
 - Remove all the link sources
+- Humanize this is a way to make the blog better
 
 Return ONLY the complete markdown blog content with images with proper blog format, properly distributed throughout, ready to display as-is.`;
 

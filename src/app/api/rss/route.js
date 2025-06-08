@@ -226,7 +226,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
 
     const wpPayload = {
       title: title,
-      content: htmlContent.replace(title, ''),
+      content: htmlContent.replaceAll(title, ''),
       status: wpConfig.defaultStatus || 'publish',
       excerpt: excerpt,
       author: 1, // Default author ID
@@ -851,9 +851,8 @@ INSTRUCTIONS:
 9. Remove any unnecessary or redundant content like navigation elements, footers, etc.
 10. Ensure the content flows naturally and reads professionally
 11. If categories are available, incorporate them as tags at the end
-
+12. Humanize this is a way to make the blog better
 IMPORTANT: Your output must be in perfect markdown format, ready to be displayed as a professional blog post. Focus on delivering valuable content without any website cruft or unnecessary elements.
-
 Return ONLY the markdown blog content, with no extra commentary. It should be ready to display as-is. Don't show "markdown" in the starting just show the title as # title`;
 
     // 4. Use DeepSeek to extract and enhance data
