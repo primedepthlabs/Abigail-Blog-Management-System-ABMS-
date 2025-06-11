@@ -20,6 +20,7 @@ import {
   User,
   Tag,
   FolderOpen,
+  Package,
 } from 'lucide-react';
 
 // HARDCODED PUBLISHING DESTINATIONS - Update these with your actual credentials
@@ -34,7 +35,7 @@ const PUBLISHING_DESTINATIONS = {
       color: 'bg-green-600',
       isActive: true,
       priority: 10,
-      defaultAuthor: 'Blog Bot',
+      defaultAuthor: 'Blog Escapade Emporium',
     },
     {
       id: 'shopify-2',
@@ -45,7 +46,7 @@ const PUBLISHING_DESTINATIONS = {
       color: 'bg-green-600',
       isActive: true,
       priority: 10,
-      defaultAuthor: 'Blog Bot',
+      defaultAuthor: 'CelebrityFashion.VIP',
     },
   ],
   wordpress: [
@@ -193,6 +194,23 @@ interface WordPressCategory {
   destinationName: string;
 }
 
+interface ShopifyCollection {
+  id: number;
+  title: string;
+  handle: string;
+  description?: string;
+  image?: {
+    alt?: string;
+    src?: string;
+  };
+  published_scope: string;
+  sort_order: string;
+  products_count: number;
+  collection_type: string;
+  destinationId: string;
+  destinationName: string;
+}
+
 const BlogHumanizerUI = () => {
   const [blogUrl, setBlogUrl] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -207,6 +225,13 @@ const BlogHumanizerUI = () => {
   const [wordpressCategories, setWordpressCategories] = useState<WordPressCategory[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<{ [destinationId: string]: number[] }>({});
   const [isLoadingCategories, setIsLoadingCategories] = useState<boolean>(false);
+
+  // Shopify Collections state
+  const [shopifyCollections, setShopifyCollections] = useState<ShopifyCollection[]>([]);
+  const [selectedCollections, setSelectedCollections] = useState<{ [destinationId: string]: number[] }>({});
+  const [isLoadingCollections, setIsLoadingCollections] = useState<boolean>(false);
+
+  // Modal states
   const [showCategoriesModal, setShowCategoriesModal] = useState<boolean>(false);
 
   // Get active destinations
@@ -323,6 +348,49 @@ const BlogHumanizerUI = () => {
     }
   };
 
+  // Fetch Shopify collections for selected destinations
+  const fetchShopifyCollections = async () => {
+    setIsLoadingCollections(true);
+    const allCollections: ShopifyCollection[] = [];
+
+    try {
+      // Fetch collections for each selected Shopify destination via backend API
+      const selectedShopifyDestinations = Array.from(selectedDestinations.shopify)
+        .map(id => PUBLISHING_DESTINATIONS.shopify.find(d => d.id === id))
+        .filter(Boolean);
+
+      if (selectedShopifyDestinations.length > 0) {
+        const response = await fetch('/api/shopify/collections', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            destinations: selectedShopifyDestinations
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.collections) {
+            allCollections.push(...data.collections);
+          }
+        } else {
+          console.error('Failed to fetch collections from API:', response.status);
+          setError('Failed to fetch Shopify collections from API');
+        }
+      }
+
+      setShopifyCollections(allCollections);
+    } catch (err) {
+      console.error('Failed to fetch Shopify collections:', err);
+      setError('Failed to fetch Shopify collections. Please check your API endpoint.');
+    } finally {
+      setIsLoadingCollections(false);
+    }
+  };
+
   // Initialize categories with default selections (first category for each site)
   useEffect(() => {
     if (wordpressCategories.length > 0) {
@@ -352,6 +420,39 @@ const BlogHumanizerUI = () => {
     }
   }, [wordpressCategories]);
 
+  // Initialize collections with default selections (first collection for each store)
+  useEffect(() => {
+    if (shopifyCollections.length > 0) {
+      const defaultSelections: { [destinationId: string]: number[] } = {};
+
+      // Group collections by destination
+      const collectionsByDestination = shopifyCollections.reduce((acc, collection) => {
+        if (!acc[collection.destinationId]) {
+          acc[collection.destinationId] = [];
+        }
+        acc[collection.destinationId].push(collection);
+        return acc;
+      }, {} as { [key: string]: ShopifyCollection[] });
+
+      // Select the first collection for each destination
+      Object.keys(collectionsByDestination).forEach(destId => {
+        const collections = collectionsByDestination[destId];
+        if (collections.length > 0) {
+          // Try to find a "Blog" or "Articles" collection first, or use the first collection
+          const blogCollection = collections.find(col =>
+            col.title.toLowerCase().includes('blog') ||
+            col.title.toLowerCase().includes('article') ||
+            col.title.toLowerCase().includes('news')
+          );
+          const defaultCollection = blogCollection || collections[0];
+          defaultSelections[destId] = [defaultCollection.id];
+        }
+      });
+
+      setSelectedCollections(defaultSelections);
+    }
+  }, [shopifyCollections]);
+
   // Fetch categories when WordPress destinations change
   useEffect(() => {
     if (selectedDestinations.wordpress.size > 0) {
@@ -361,6 +462,16 @@ const BlogHumanizerUI = () => {
       setSelectedCategories({});
     }
   }, [selectedDestinations.wordpress]);
+
+  // Fetch collections when Shopify destinations change
+  useEffect(() => {
+    if (selectedDestinations.shopify.size > 0) {
+      fetchShopifyCollections();
+    } else {
+      setShopifyCollections([]);
+      setSelectedCollections({});
+    }
+  }, [selectedDestinations.shopify]);
 
   // Test connections for selected destinations
   const testSelectedConnections = async () => {
@@ -571,11 +682,44 @@ const BlogHumanizerUI = () => {
     }));
   };
 
+  // Collection selection functions
+  const toggleCollection = (destinationId: string, collectionId: number) => {
+    setSelectedCollections(prev => {
+      const currentSelection = prev[destinationId] || [];
+      const newSelection = currentSelection.includes(collectionId)
+        ? currentSelection.filter(id => id !== collectionId)
+        : [...currentSelection, collectionId];
+
+      return { ...prev, [destinationId]: newSelection };
+    });
+  };
+
+  const selectAllCollections = (destinationId: string) => {
+    const destinationCollections = shopifyCollections
+      .filter(col => col.destinationId === destinationId)
+      .map(col => col.id);
+
+    setSelectedCollections(prev => ({
+      ...prev,
+      [destinationId]: destinationCollections
+    }));
+  };
+
+  const deselectAllCollections = (destinationId: string) => {
+    setSelectedCollections(prev => ({
+      ...prev,
+      [destinationId]: []
+    }));
+  };
+
   // Get selected destination configurations
   const getSelectedDestinationConfigs = () => {
     const shopifyConfigs = PUBLISHING_DESTINATIONS.shopify.filter(dest =>
       selectedDestinations.shopify.has(dest.id)
-    );
+    ).map(dest => ({
+      ...dest,
+      selectedCollections: selectedCollections[dest.id] || []
+    }));
     const wordpressConfigs = PUBLISHING_DESTINATIONS.wordpress.filter(dest =>
       selectedDestinations.wordpress.has(dest.id)
     ).map(dest => ({
@@ -706,6 +850,16 @@ const BlogHumanizerUI = () => {
       }
     }
 
+    // Check if Shopify destinations have collections selected
+    const shopifyDestinations = Array.from(selectedDestinations.shopify);
+    for (const destId of shopifyDestinations) {
+      const cols = selectedCollections[destId] || [];
+      if (cols.length === 0) {
+        setError('Please select at least one collection for each Shopify destination');
+        return;
+      }
+    }
+
     // Check connection health before processing
     const healthyConnections = connectionTests.filter(test => test.success);
     const selectedConnectionIds = [
@@ -736,12 +890,13 @@ const BlogHumanizerUI = () => {
 
       const publishingDestinations = getSelectedDestinationConfigs();
 
-      // Prepare the request data with categories
+      // Prepare the request data with categories and collections
       const requestData = {
         url: blogUrl,
         action: 'humanize_and_publish',
         publishingDestinations,
         wordpressCategories: selectedCategories,
+        shopifyCollections: selectedCollections,
       };
 
       console.log('🚀 About to send request:', requestData);
@@ -825,7 +980,7 @@ const BlogHumanizerUI = () => {
     return 'Draft';
   };
 
-  // Categories Selection Modal Component
+  // Categories & Collections Selection Modal Component
   const CategoriesModal = () => {
     const categoriesByDestination = wordpressCategories.reduce((acc, cat) => {
       if (!acc[cat.destinationId]) {
@@ -835,13 +990,21 @@ const BlogHumanizerUI = () => {
       return acc;
     }, {} as { [key: string]: WordPressCategory[] });
 
+    const collectionsByDestination = shopifyCollections.reduce((acc, collection) => {
+      if (!acc[collection.destinationId]) {
+        acc[collection.destinationId] = [];
+      }
+      acc[collection.destinationId].push(collection);
+      return acc;
+    }, {} as { [key: string]: ShopifyCollection[] });
+
     return (
-      <div className='fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4'>
-        <div className='bg-gray-900 rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col'>
+      <div className='fixed h-screen inset-0 bg-black/70 flex items-center justify-center z-50 p-4'>
+        <div className='bg-gray-900 rounded-xl shadow-2xl max-w-6xl w-full max-h-[80vh] overflow-hidden flex flex-col'>
           <div className='flex items-center justify-between p-5 border-b border-gray-800'>
             <h3 className='text-xl font-semibold text-white flex items-center'>
               <Tag className='mr-2 h-5 w-5 text-blue-400' />
-              Select WordPress Categories
+              Select Categories & Collections
             </h3>
             <button
               onClick={() => setShowCategoriesModal(false)}
@@ -852,89 +1015,175 @@ const BlogHumanizerUI = () => {
           </div>
 
           <div className='p-5 overflow-y-auto flex-1'>
-            {isLoadingCategories ? (
+            {(isLoadingCategories || isLoadingCollections) ? (
               <div className='flex items-center justify-center py-8'>
                 <Loader2 className='h-8 w-8 mr-3 animate-spin text-blue-400' />
-                <span className='text-gray-300'>Loading categories...</span>
+                <span className='text-gray-300'>Loading categories and collections...</span>
               </div>
             ) : (
-              <div className='space-y-6'>
-                {Object.entries(categoriesByDestination).map(([destId, categories]) => {
-                  const destination = PUBLISHING_DESTINATIONS.wordpress.find(d => d.id === destId);
-                  const selectedCats = selectedCategories[destId] || [];
+              <div className='space-y-8'>
+                {/* Shopify Collections */}
+                {Object.keys(collectionsByDestination).length > 0 && (
+                  <div>
+                    <h3 className='text-lg font-semibold text-green-400 mb-4 flex items-center'>
+                      <Package className='mr-2 h-5 w-5' />
+                      Shopify Collections
+                    </h3>
+                    <div className='space-y-6'>
+                      {Object.entries(collectionsByDestination).map(([destId, collections]) => {
+                        const destination = PUBLISHING_DESTINATIONS.shopify.find(d => d.id === destId);
+                        const selectedCols = selectedCollections[destId] || [];
 
-                  return (
-                    <div key={destId} className='border border-gray-700 rounded-lg p-4'>
-                      <div className='flex items-center justify-between mb-4'>
-                        <h4 className='text-lg font-medium text-white flex items-center'>
-                          <div className={`w-3 h-3 rounded-full ${destination?.color} mr-2`}></div>
-                          {destination?.name} ({selectedCats.length}/{categories.length})
-                        </h4>
-                        <div className='flex gap-2'>
-                          <button
-                            onClick={() => selectAllCategories(destId)}
-                            className='px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors'
-                          >
-                            Select All
-                          </button>
-                          <button
-                            onClick={() => deselectAllCategories(destId)}
-                            className='px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors'
-                          >
-                            Clear All
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto'>
-                        {categories.map((category) => {
-                          const isSelected = selectedCats.includes(category.id);
-                          return (
-                            <div
-                              key={category.id}
-                              className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${isSelected
-                                ? 'border-blue-500 bg-blue-500/10'
-                                : 'border-gray-700 hover:border-gray-600'
-                                }`}
-                              onClick={() => toggleCategory(destId, category.id)}
-                            >
-                              <div className='flex items-center justify-between mb-1'>
-                                <span className='font-medium text-white text-sm'>{category.name}</span>
-                                {isSelected ? (
-                                  <CheckCircle2 className='h-4 w-4 text-blue-500' />
-                                ) : (
-                                  <div className='h-4 w-4 border-2 border-gray-400 rounded'></div>
-                                )}
+                        return (
+                          <div key={destId} className='border border-gray-700 rounded-lg p-4'>
+                            <div className='flex items-center justify-between mb-4'>
+                              <h4 className='text-lg font-medium text-white flex items-center'>
+                                <div className={`w-3 h-3 rounded-full ${destination?.color} mr-2`}></div>
+                                {destination?.name} ({selectedCols.length}/{collections.length})
+                              </h4>
+                              <div className='flex gap-2'>
+                                <button
+                                  onClick={() => selectAllCollections(destId)}
+                                  className='px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors'
+                                >
+                                  Select All
+                                </button>
+                                <button
+                                  onClick={() => deselectAllCollections(destId)}
+                                  className='px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors'
+                                >
+                                  Clear All
+                                </button>
                               </div>
-                              <div className='flex items-center justify-between text-xs text-gray-400'>
-                                <span>{category.slug}</span>
-                                <span>{category.count} posts</span>
-                              </div>
-                              {category.description && (
-                                <p className='text-xs text-gray-500 mt-1 truncate'>{category.description}</p>
-                              )}
                             </div>
-                          );
-                        })}
-                      </div>
+
+                            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto'>
+                              {collections.map((collection) => {
+                                const isSelected = selectedCols.includes(collection.id);
+                                return (
+                                  <div
+                                    key={collection.id}
+                                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${isSelected
+                                      ? 'border-green-500 bg-green-500/10'
+                                      : 'border-gray-700 hover:border-gray-600'
+                                      }`}
+                                    onClick={() => toggleCollection(destId, collection.id)}
+                                  >
+                                    <div className='flex items-center justify-between mb-1'>
+                                      <span className='font-medium text-white text-sm'>{collection.title}</span>
+                                      {isSelected ? (
+                                        <CheckCircle2 className='h-4 w-4 text-green-500' />
+                                      ) : (
+                                        <div className='h-4 w-4 border-2 border-gray-400 rounded'></div>
+                                      )}
+                                    </div>
+                                    <div className='flex items-center justify-between text-xs text-gray-400'>
+                                      <span>{collection.handle}</span>
+                                      <span>{collection.products_count} products</span>
+                                    </div>
+                                    {collection.description && (
+                                      <p className='text-xs text-gray-500 mt-1 truncate'>
+                                        {collection.description.replace(/<[^>]*>/g, '').substring(0, 50)}...
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  </div>
+                )}
+
+                {/* WordPress Categories */}
+                {Object.keys(categoriesByDestination).length > 0 && (
+                  <div>
+                    <h3 className='text-lg font-semibold text-blue-400 mb-4 flex items-center'>
+                      <Tag className='mr-2 h-5 w-5' />
+                      WordPress Categories
+                    </h3>
+                    <div className='space-y-6'>
+                      {Object.entries(categoriesByDestination).map(([destId, categories]) => {
+                        const destination = PUBLISHING_DESTINATIONS.wordpress.find(d => d.id === destId);
+                        const selectedCats = selectedCategories[destId] || [];
+
+                        return (
+                          <div key={destId} className='border border-gray-700 rounded-lg p-4'>
+                            <div className='flex items-center justify-between mb-4'>
+                              <h4 className='text-lg font-medium text-white flex items-center'>
+                                <div className={`w-3 h-3 rounded-full ${destination?.color} mr-2`}></div>
+                                {destination?.name} ({selectedCats.length}/{categories.length})
+                              </h4>
+                              <div className='flex gap-2'>
+                                <button
+                                  onClick={() => selectAllCategories(destId)}
+                                  className='px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors'
+                                >
+                                  Select All
+                                </button>
+                                <button
+                                  onClick={() => deselectAllCategories(destId)}
+                                  className='px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors'
+                                >
+                                  Clear All
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto'>
+                              {categories.map((category) => {
+                                const isSelected = selectedCats.includes(category.id);
+                                return (
+                                  <div
+                                    key={category.id}
+                                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${isSelected
+                                      ? 'border-blue-500 bg-blue-500/10'
+                                      : 'border-gray-700 hover:border-gray-600'
+                                      }`}
+                                    onClick={() => toggleCategory(destId, category.id)}
+                                  >
+                                    <div className='flex items-center justify-between mb-1'>
+                                      <span className='font-medium text-white text-sm'>{category.name}</span>
+                                      {isSelected ? (
+                                        <CheckCircle2 className='h-4 w-4 text-blue-500' />
+                                      ) : (
+                                        <div className='h-4 w-4 border-2 border-gray-400 rounded'></div>
+                                      )}
+                                    </div>
+                                    <div className='flex items-center justify-between text-xs text-gray-400'>
+                                      <span>{category.slug}</span>
+                                      <span>{category.count} posts</span>
+                                    </div>
+                                    {category.description && (
+                                      <p className='text-xs text-gray-500 mt-1 truncate'>{category.description}</p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {Object.keys(categoriesByDestination).length === 0 && !isLoadingCategories && (
+            {Object.keys(categoriesByDestination).length === 0 && Object.keys(collectionsByDestination).length === 0 && !isLoadingCategories && !isLoadingCollections && (
               <div className='text-center py-8'>
                 <FolderOpen className='h-8 w-8 mx-auto mb-4 text-gray-600' />
-                <p className='text-gray-400'>No WordPress destinations selected</p>
-                <p className='text-gray-500 text-sm mt-2'>Select WordPress destinations first to load categories</p>
+                <p className='text-gray-400'>No destinations selected</p>
+                <p className='text-gray-500 text-sm mt-2'>Select Shopify stores or WordPress sites first to load collections and categories</p>
               </div>
             )}
           </div>
 
           <div className='p-4 border-t border-gray-800 flex justify-between items-center'>
             <div className='text-sm text-gray-400'>
-              {Object.values(selectedCategories).reduce((acc, cats) => acc + cats.length, 0)} categories selected
+              Selected: {Object.values(selectedCategories).reduce((acc, cats) => acc + cats.length, 0)} categories, {Object.values(selectedCollections).reduce((acc, cols) => acc + cols.length, 0)} collections
             </div>
             <div className='flex gap-3'>
               <button
@@ -1105,6 +1354,7 @@ const BlogHumanizerUI = () => {
             <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
               {activeDestinations.shopify.map((destination) => {
                 const isSelected = selectedDestinations.shopify.has(destination.id);
+                const selectedCols = selectedCollections[destination.id] || [];
                 return (
                   <div
                     key={destination.id}
@@ -1130,6 +1380,12 @@ const BlogHumanizerUI = () => {
                     <h5 className='font-medium text-white mb-1'>{destination.name}</h5>
                     <p className='text-sm text-gray-400 mb-2'>{destination.description}</p>
                     <p className='text-xs text-gray-500 font-mono truncate'>{destination.shopDomain}</p>
+                    {isSelected && selectedCols.length > 0 && (
+                      <div className='mt-2 flex items-center text-xs text-green-300'>
+                        <Package className='h-3 w-3 mr-1' />
+                        {selectedCols.length} collections selected
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1238,7 +1494,7 @@ const BlogHumanizerUI = () => {
       {/* Destination Selection Modal */}
       {showDestinationModal && <DestinationSelectionModal />}
 
-      {/* Categories Selection Modal */}
+      {/* Categories & Collections Selection Modal */}
       {showCategoriesModal && <CategoriesModal />}
 
       <div className='max-w-6xl mx-auto'>
@@ -1254,7 +1510,7 @@ const BlogHumanizerUI = () => {
           </h1>
           <p className='text-gray-300 max-w-2xl mx-auto'>
             Transform any blog post into engaging, humanized content and
-            automatically publish to multiple Shopify stores and WordPress sites with custom categories.
+            automatically publish to multiple Shopify stores and WordPress sites with custom categories and collections.
           </p>
         </div>
 
@@ -1279,13 +1535,13 @@ const BlogHumanizerUI = () => {
                 )}
                 {connectionHealth.message}
               </button>
-              {selectedDestinations.wordpress.size > 0 && (
+              {(selectedDestinations.wordpress.size > 0 || selectedDestinations.shopify.size > 0) && (
                 <button
                   onClick={() => setShowCategoriesModal(true)}
                   className='flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors'
                 >
                   <Tag className='h-4 w-4 mr-2' />
-                  Categories ({Object.values(selectedCategories).reduce((acc, cats) => acc + cats.length, 0)})
+                  Categories & Collections ({Object.values(selectedCategories).reduce((acc, cats) => acc + cats.length, 0) + Object.values(selectedCollections).reduce((acc, cols) => acc + cols.length, 0)})
                 </button>
               )}
               <button
@@ -1308,14 +1564,23 @@ const BlogHumanizerUI = () => {
                 {Array.from(selectedDestinations.shopify).map(destId => {
                   const dest = PUBLISHING_DESTINATIONS.shopify.find(d => d.id === destId);
                   const testResult = connectionTests.find(t => t.destinationId === destId);
+                  const selectedCols = selectedCollections[destId] || [];
                   return dest ? (
-                    <div key={destId} className='text-sm text-green-300 flex items-center justify-between'>
-                      <div className='flex items-center'>
-                        <div className={`w-2 h-2 rounded-full ${dest.color} mr-2`}></div>
-                        {dest.name}
+                    <div key={destId} className='text-sm text-green-300'>
+                      <div className='flex items-center justify-between'>
+                        <div className='flex items-center'>
+                          <div className={`w-2 h-2 rounded-full ${dest.color} mr-2`}></div>
+                          {dest.name}
+                        </div>
+                        {testResult && (
+                          <div className={`w-2 h-2 rounded-full ${testResult.success ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        )}
                       </div>
-                      {testResult && (
-                        <div className={`w-2 h-2 rounded-full ${testResult.success ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                      {selectedCols.length > 0 && (
+                        <div className='text-xs text-green-400 ml-4 flex items-center'>
+                          <Package className='h-3 w-3 mr-1' />
+                          {selectedCols.length} collections
+                        </div>
                       )}
                     </div>
                   ) : null;
@@ -1951,6 +2216,15 @@ const BlogHumanizerUI = () => {
           </div>
         )}
       </div>
+
+      <style jsx global>{`
+        .line-clamp-3 {
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+      `}</style>
     </div>
   );
 };

@@ -89,7 +89,104 @@ function extractTitle(markdown) {
   return 'Blog Post';
 }
 
-// SHOPIFY FUNCTIONS - Dynamic configuration
+// Extract tags from markdown content
+function extractTags(markdown) {
+  const tags = [];
+
+  // Method 1: Look for hashtags in the content (like #ChrisPratt #TheTerminalList)
+  const hashtagMatches = markdown.match(/#\w+/g);
+  if (hashtagMatches) {
+    const cleanedHashtags = hashtagMatches.map(tag =>
+      tag.substring(1) // Remove the # symbol
+        .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+        .trim()
+    );
+    tags.push(...cleanedHashtags);
+  }
+
+  // Method 2: Look for "Tags:" section in the content
+  const tagsSectionMatch = markdown.match(/Tags:\s*(.+)/i);
+  if (tagsSectionMatch) {
+    const tagsList = tagsSectionMatch[1]
+      .split(/[,;]/) // Split by comma or semicolon
+      .map(tag => tag.trim().replace(/^#/, '')) // Remove # if present
+      .filter(tag => tag.length > 0);
+    tags.push(...tagsList);
+  }
+
+  // Method 3: Look for "Tagged:" section in the content
+  const taggedSectionMatch = markdown.match(/Tagged:\s*(.+)/i);
+  if (taggedSectionMatch) {
+    const tagsList = taggedSectionMatch[1]
+      .split(/[,;]/) // Split by comma or semicolon
+      .map(tag => tag.trim().replace(/^#/, '')) // Remove # if present
+      .filter(tag => tag.length > 0);
+    tags.push(...tagsList);
+  }
+
+  // Method 4: Look for keywords section
+  const keywordsMatch = markdown.match(/Keywords?:\s*(.+)/i);
+  if (keywordsMatch) {
+    const keywordsList = keywordsMatch[1]
+      .split(/[,;]/) // Split by comma or semicolon
+      .map(keyword => keyword.trim())
+      .filter(keyword => keyword.length > 0);
+    tags.push(...keywordsList);
+  }
+
+  // Remove duplicates and filter out common stop words
+  const stopWords = [
+    'auto-generated', 'rss feed', 'single blog', 'blog bot', 'generated',
+    'auto', 'rss', 'feed', 'blog', 'article', 'post', 'content', 'news',
+    'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
+    'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be', 'been', 'being'
+  ];
+
+  const uniqueTags = [...new Set(tags)]
+    .map(tag => tag.toLowerCase().trim())
+    .filter(tag =>
+      tag.length > 2 &&
+      !stopWords.includes(tag.toLowerCase()) &&
+      !/^\d+$/.test(tag) // Remove pure numbers
+    )
+    .map(tag =>
+      // Capitalize first letter of each word
+      tag.split(' ').map(word =>
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ')
+    );
+
+  logger.info(`Extracted ${uniqueTags.length} tags from content:`, uniqueTags);
+
+  return uniqueTags;
+}
+
+// Clean and remove tag-related content from markdown
+function cleanTagsFromContent(markdown) {
+  let cleanedContent = markdown;
+
+  // Remove hashtags from content
+  cleanedContent = cleanedContent.replace(/#\w+/g, '');
+
+  // Remove "Tags:" sections
+  cleanedContent = cleanedContent.replace(/Tags:\s*[^\n]+/gi, '');
+
+  // Remove "Tagged:" sections
+  cleanedContent = cleanedContent.replace(/Tagged:\s*[^\n]+/gi, '');
+
+  // Remove "Keywords:" sections
+  cleanedContent = cleanedContent.replace(/Keywords?:\s*[^\n]+/gi, '');
+
+  // Clean up extra whitespace and line breaks
+  cleanedContent = cleanedContent
+    .replace(/\n\s*\n\s*\n/g, '\n\n') // Replace multiple line breaks with double line breaks
+    .replace(/^\s+|\s+$/g, '') // Trim start and end
+    .replace(/\s+/g, ' '); // Replace multiple spaces with single space
+
+  return cleanedContent;
+}
+
+// SHOPIFY FUNCTIONS - Dynamic configuration with collections support
 async function getBlogId(shopifyConfig) {
   try {
     const response = await fetch(
@@ -120,14 +217,54 @@ async function getBlogId(shopifyConfig) {
   }
 }
 
-async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyConfig) {
+// Fetch collection details for selected collections
+async function fetchCollectionDetails(shopifyConfig, collectionIds) {
+  const collectionDetails = [];
+
+  for (const collectionId of collectionIds) {
+    try {
+      const response = await fetch(
+        `https://${shopifyConfig.shopDomain}/admin/api/2023-10/collections/${collectionId}.json`,
+        {
+          headers: {
+            'X-Shopify-Access-Token': shopifyConfig.accessToken,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        collectionDetails.push({
+          id: data.collection.id,
+          title: data.collection.title,
+          handle: data.collection.handle,
+          description: data.collection.body_html
+        });
+        logger.info(`Fetched collection: ${data.collection.title} (ID: ${collectionId})`);
+      } else {
+        logger.error(`Failed to fetch collection ${collectionId}:`, response.status);
+      }
+    } catch (error) {
+      logger.error(`Error fetching collection ${collectionId}:`, error);
+    }
+  }
+
+  return collectionDetails;
+}
+
+async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyConfig, selectedCollections = []) {
   try {
     const blogId = await getBlogId(shopifyConfig);
     const title = extractTitle(humanizedMarkdown);
-    const htmlContent = markdownToHtml(humanizedMarkdown);
+
+    // Extract tags from content and clean the content
+    const extractedTags = extractTags(humanizedMarkdown);
+    const cleanedMarkdown = cleanTagsFromContent(humanizedMarkdown);
+    const htmlContent = markdownToHtml(cleanedMarkdown.replaceAll(title, ''));
 
     // Extract full plain text without truncation
-    const plainText = humanizedMarkdown
+    const plainText = cleanedMarkdown
       .replace(/^#.*$/gm, '')
       .replace(/!\[.*?\]\(.*?\)/g, '')
       .replace(/\[.*?\]\(.*?\)/g, '')
@@ -136,14 +273,40 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyCo
       .trim();
 
     const excerpt = plainText; // No truncation
-    const tags = `Single Blog, Auto-Generated, ${shopifyConfig.name}`;
+
+    // Fetch collection details and create tags
+    let collectionTags = [];
+    let collectionNames = [];
+    let collectionHandles = [];
+
+    if (selectedCollections.length > 0) {
+      logger.info(`Processing ${selectedCollections.length} selected collections for ${shopifyConfig.name}`);
+      const collectionDetails = await fetchCollectionDetails(shopifyConfig, selectedCollections);
+
+      collectionTags = collectionDetails.map(collection => collection.title);
+      collectionNames = collectionDetails.map(collection => collection.title);
+      collectionHandles = collectionDetails.map(collection => collection.handle);
+
+      logger.info(`Collection tags for ${shopifyConfig.name}:`, collectionTags);
+    }
+
+    // Use extracted tags instead of auto-generated ones
+    const categoryTags = blogData.categories || [];
+    const allTags = [
+      ...extractedTags,        // Use extracted tags from content
+      ...categoryTags,         // Original categories from RSS
+      ...collectionTags,       // Collection names as tags
+      shopifyConfig.name       // Store name for identification
+    ].filter(Boolean).join(', ');
+
+    logger.info(`Final tags for Shopify post on ${shopifyConfig.name}:`, allTags);
 
     const articleData = {
       article: {
         title: title,
         body_html: htmlContent,
         summary: excerpt,
-        tags: tags,
+        tags: allTags,
         published: false,
         author: shopifyConfig.defaultAuthor || blogData.author || 'Blog Bot',
         created_at: blogData.pubDate
@@ -166,6 +329,7 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyCo
     }
 
     logger.info(`Creating Shopify blog post on ${shopifyConfig.name}: "${title}"`);
+    logger.info(`Collections being associated: ${collectionNames.join(', ')}`);
 
     const response = await fetch(
       `https://${shopifyConfig.shopDomain}/admin/api/2023-10/blogs/${blogId}/articles.json`,
@@ -187,6 +351,93 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyCo
     }
 
     const result = await response.json();
+    const articleId = result.article.id;
+
+    // Add collection associations as metafields
+    let collectionMetafieldResults = [];
+
+    if (selectedCollections.length > 0) {
+      try {
+        // Add metafield with collection IDs
+        const collectionIdsMetafield = {
+          metafield: {
+            namespace: 'collections',
+            key: 'associated_collection_ids',
+            value: selectedCollections.join(','),
+            type: 'single_line_text_field'
+          }
+        };
+
+        const metafieldResponse1 = await fetch(
+          `https://${shopifyConfig.shopDomain}/admin/api/2023-10/articles/${articleId}/metafields.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopifyConfig.accessToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(collectionIdsMetafield),
+          }
+        );
+
+        // Add metafield with collection names
+        const collectionNamesMetafield = {
+          metafield: {
+            namespace: 'collections',
+            key: 'associated_collection_names',
+            value: collectionNames.join(','),
+            type: 'single_line_text_field'
+          }
+        };
+
+        const metafieldResponse2 = await fetch(
+          `https://${shopifyConfig.shopDomain}/admin/api/2023-10/articles/${articleId}/metafields.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopifyConfig.accessToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(collectionNamesMetafield),
+          }
+        );
+
+        // Add metafield with extracted tags
+        const extractedTagsMetafield = {
+          metafield: {
+            namespace: 'article',
+            key: 'extracted_tags',
+            value: extractedTags.join(','),
+            type: 'single_line_text_field'
+          }
+        };
+
+        const metafieldResponse3 = await fetch(
+          `https://${shopifyConfig.shopDomain}/admin/api/2023-10/articles/${articleId}/metafields.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopifyConfig.accessToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(extractedTagsMetafield),
+          }
+        );
+
+        collectionMetafieldResults.push({
+          collection_ids_metafield: metafieldResponse1.ok,
+          collection_names_metafield: metafieldResponse2.ok,
+          extracted_tags_metafield: metafieldResponse3.ok
+        });
+
+        if (metafieldResponse1.ok && metafieldResponse2.ok && metafieldResponse3.ok) {
+          logger.success(`Successfully added all metafields to article ${articleId}`);
+        }
+      } catch (metafieldError) {
+        logger.error(`Error adding metafields:`, metafieldError);
+      }
+    }
+
     logger.success(`Created Shopify blog post on ${shopifyConfig.name}: ${result.article.id}`);
 
     return {
@@ -202,6 +453,14 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyCo
         '',
       )}/blogs/${result.article.blog_id}/${result.article.handle}`,
       publishedAt: new Date().toISOString(),
+      collections: {
+        selectedCollectionIds: selectedCollections,
+        associatedCollectionNames: collectionNames,
+        collectionTags: collectionTags,
+        metafieldResults: collectionMetafieldResults
+      },
+      extractedTags: extractedTags,
+      allTags: allTags
     };
   } catch (error) {
     logger.error(`Failed to create Shopify blog post on ${shopifyConfig.name}:`, error);
@@ -212,6 +471,11 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyCo
       destinationId: shopifyConfig.id,
       error: error.message,
       publishedAt: new Date().toISOString(),
+      collections: {
+        selectedCollectionIds: selectedCollections,
+        error: error.message
+      },
+      extractedTags: []
     };
   }
 }
@@ -220,12 +484,16 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyCo
 async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfig, selectedCategories = []) {
   try {
     const title = extractTitle(humanizedMarkdown);
-    const htmlContent = markdownToHtml(humanizedMarkdown);
+
+    // Extract tags from content and clean the content
+    const extractedTags = extractTags(humanizedMarkdown);
+    const cleanedMarkdown = cleanTagsFromContent(humanizedMarkdown);
+    const htmlContent = markdownToHtml(cleanedMarkdown.replaceAll(title, ''));
 
     logger.info(`Creating WordPress blog post on ${wpConfig.name}: "${title}"`);
 
     // Extract full plain text without truncation
-    const plainText = humanizedMarkdown
+    const plainText = cleanedMarkdown
       .replace(/^#.*$/gm, '')
       .replace(/!\[.*?\]\(.*?\)/g, '')
       .replace(/\[.*?\]\(.*?\)/g, '')
@@ -255,6 +523,16 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
       logger.info(`Using fallback category for ${wpConfig.name}:`, [1]);
     }
 
+    // Use extracted tags instead of auto-generated ones
+    const originalTags = blogData.categories || [];
+    const finalTags = [
+      ...extractedTags,        // Use extracted tags from content
+      ...originalTags,         // Original categories from RSS
+      wpConfig.name            // Site name for identification
+    ].filter(Boolean);
+
+    logger.info(`Final tags for WordPress post on ${wpConfig.name}:`, finalTags);
+
     const wpPayload = {
       title: title,
       content: htmlContent.replaceAll(title, ''),
@@ -262,14 +540,15 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
       excerpt: excerpt,
       author: 1,
       categories: categoriesToUse,
-      tags: wpConfig.tags || [],
+      tags: finalTags, // Use extracted tags instead of wpConfig.tags
       meta: {
         _wp_original_source: blogData.url || '',
         _wp_original_author: blogData.author || '',
         _wp_publication_date: blogData.pubDate || new Date().toISOString(),
         _wp_rss_source: 'Auto-Generated from Single Blog URL',
         _wp_destination: wpConfig.name,
-        _wp_selected_categories: selectedCategories, // Store selected categories for reference
+        _wp_selected_categories: selectedCategories,
+        _wp_extracted_tags: extractedTags.join(','), // Store extracted tags for reference
       },
     };
 
@@ -284,6 +563,8 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
       status: wpPayload.status,
       categories: categoriesToUse,
       categoriesCount: categoriesToUse.length,
+      tags: finalTags,
+      tagsCount: finalTags.length,
       originalSource: blogData.url,
     });
 
@@ -304,6 +585,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
         statusText: wpRes.statusText,
         response: wpData,
         categories: categoriesToUse,
+        tags: finalTags,
       });
 
       return {
@@ -314,6 +596,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
         error: wpData.message || `WordPress API error: ${wpRes.status}`,
         publishedAt: new Date().toISOString(),
         categoriesUsed: categoriesToUse,
+        extractedTags: extractedTags,
       };
     }
 
@@ -322,6 +605,8 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
       wp_url: wpData.link || 'N/A',
       categories: categoriesToUse,
       categoriesAssigned: wpData.categories || [],
+      tags: finalTags,
+      tagsAssigned: wpData.tags || [],
     });
 
     return {
@@ -336,6 +621,9 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
       publishedAt: new Date().toISOString(),
       categoriesUsed: categoriesToUse,
       categoriesAssigned: wpData.categories || [],
+      extractedTags: extractedTags,
+      tagsUsed: finalTags,
+      tagsAssigned: wpData.tags || [],
     };
   } catch (error) {
     logger.error(`Failed to create WordPress blog post on ${wpConfig.name}:`, error);
@@ -347,6 +635,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
       error: error.message,
       publishedAt: new Date().toISOString(),
       categoriesUsed: selectedCategories || [],
+      extractedTags: [],
     };
   }
 }
@@ -594,11 +883,13 @@ function distributeImagesInContent(contentText, images) {
   return result.trim();
 }
 
-// UPDATED Main processing function with multi-destination publishing and categories support
-async function processSingleBlog(blogUrl, publishingDestinations, wordpressCategories = {}) {
+// UPDATED Main processing function with multi-destination publishing, categories, collections, and tag extraction
+async function processSingleBlog(blogUrl, publishingDestinations, wordpressCategories = {}, shopifyCollections = {}) {
   try {
     logger.info(`Processing single blog URL with DeepSeek: ${blogUrl}`);
     logger.info(`Publishing to: ${publishingDestinations.shopify?.length || 0} Shopify stores, ${publishingDestinations.wordpress?.length || 0} WordPress sites`);
+    logger.info(`WordPress categories:`, wordpressCategories);
+    logger.info(`Shopify collections:`, shopifyCollections);
 
     // Validate destination configurations
     const validationErrors = [];
@@ -762,10 +1053,9 @@ INSTRUCTIONS:
 4. Organize with appropriate headings (H2, H3) for better readability
 5. Maintain the full depth and detail of the original content
 6. Include a brief conclusion that wraps up all the points discussed
-${blogData.images.length > 0
-        ? '8. Use proper markdown image syntax: ![alt text](image_url "optional title")'
-        : ''
-      }
+7. Add relevant tags at the end in the format: "Tags: #Tag1 #Tag2 #Tag3" based on the content
+8. Use proper markdown image syntax: ![alt text](image_url "optional title")
+
 ADD Humanization so that the text looks it is written by a human and not AI generated
 
 IMPORTANT: 
@@ -776,8 +1066,9 @@ IMPORTANT:
 - Create the Blog text properly formatted in blog style with proper PARAGRAPHS and lines
 - Remove all the link sources
 - Humanize this is a way to make the blog better
+- Include relevant tags at the very end of the post in the format: "Tags: #Tag1 #Tag2 #Tag3"
 
-Return ONLY the complete markdown blog content with images with proper blog format, properly distributed throughout, ready to display as-is.`;
+Return ONLY the complete markdown blog content with images and tags, properly distributed throughout, ready to display as-is.`;
 
     let enhancedBlogMarkdown = '';
     try {
@@ -789,6 +1080,7 @@ Return ONLY the complete markdown blog content with images with proper blog form
     - Insert images in context; provide alt text and optional captions.
     - Maintain an engaging, authoritative tone.
     - Include an introduction, body with logical headings, and a concise conclusion.
+    - Add relevant tags at the end in the format: "Tags: #Tag1 #Tag2 #Tag3"
     - Do not include any HTML or raw JSON; only Markdown.`
       };
       const aiRes = await callDeepSeekWithRetry(
@@ -797,7 +1089,7 @@ Return ONLY the complete markdown blog content with images with proper blog form
       );
       enhancedBlogMarkdown = aiRes.choices[0]?.message?.content || '';
       logger.info(
-        'DeepSeek successfully created complete blog content with distributed images',
+        'DeepSeek successfully created complete blog content with distributed images and tags',
       );
     } catch (deepSeekError) {
       logger.error('DeepSeek failed:', deepSeekError.message);
@@ -808,6 +1100,13 @@ Return ONLY the complete markdown blog content with images with proper blog form
         blogData.images,
       );
       enhancedBlogMarkdown += contentWithImages;
+
+      // Add basic tags based on domain and title
+      const basicTags = [
+        blogData.source_domain.replace(/\./g, ''),
+        ...blogData.title.split(' ').filter(word => word.length > 3)
+      ].slice(0, 5);
+      enhancedBlogMarkdown += `\n\nTags: ${basicTags.map(tag => `#${tag}`).join(' ')}`;
     }
 
     // 6. Humanize with DeepSeek
@@ -829,7 +1128,7 @@ Return ONLY the complete markdown blog content with images with proper blog form
 
     const humanizeDataId = humanizeData[0].id;
 
-    // 8. MULTI-DESTINATION PUBLISHING WITH CATEGORIES
+    // 8. MULTI-DESTINATION PUBLISHING WITH CATEGORIES, COLLECTIONS, AND EXTRACTED TAGS
     logger.info(
       `Publishing to ${publishingDestinations.shopify.length} Shopify stores and ${publishingDestinations.wordpress.length} WordPress sites`,
     );
@@ -839,11 +1138,13 @@ Return ONLY the complete markdown blog content with images with proper blog form
       wordpress: [],
     };
 
-    // Publish to all selected Shopify stores in parallel
+    // Publish to all selected Shopify stores in parallel with collections
     if (publishingDestinations.shopify.length > 0) {
-      const shopifyPromises = publishingDestinations.shopify.map(shopifyConfig =>
-        createShopifyBlogPost(humanizedBlogMarkdown, blogData, shopifyConfig)
-      );
+      const shopifyPromises = publishingDestinations.shopify.map(shopifyConfig => {
+        const selectedCollectionsForDestination = shopifyCollections[shopifyConfig.id] || [];
+        logger.info(`Publishing to Shopify ${shopifyConfig.name} with collections:`, selectedCollectionsForDestination);
+        return createShopifyBlogPost(humanizedBlogMarkdown, blogData, shopifyConfig, selectedCollectionsForDestination);
+      });
       const shopifyResults = await Promise.all(shopifyPromises);
       publishingResults.shopify = shopifyResults;
     }
@@ -852,6 +1153,7 @@ Return ONLY the complete markdown blog content with images with proper blog form
     if (publishingDestinations.wordpress.length > 0) {
       const wpPromises = publishingDestinations.wordpress.map(wpConfig => {
         const selectedCategoriesForDestination = wordpressCategories[wpConfig.id] || [];
+        logger.info(`Publishing to WordPress ${wpConfig.name} with categories:`, selectedCategoriesForDestination);
         return createWordPressBlogPost(humanizedBlogMarkdown, blogData, wpConfig, selectedCategoriesForDestination);
       });
       const wpResults = await Promise.all(wpPromises);
@@ -863,27 +1165,42 @@ Return ONLY the complete markdown blog content with images with proper blog form
     const shopifyPublished = publishingResults.shopify.filter(r => r.success).length;
     const wordpressPublished = publishingResults.wordpress.filter(r => r.success).length;
 
-    // Create destination results summary
+    // Extract tags from the final content for summary
+    const finalExtractedTags = extractTags(humanizedBlogMarkdown);
+
+    // Create destination results summary with collections, categories, and tags info
     const destinationResults = {
       shopify: publishingDestinations.shopify.map((config, index) => ({
         name: config.name,
         published: publishingResults.shopify[index]?.success ? 1 : 0,
         errors: publishingResults.shopify[index]?.success ? 0 : 1,
+        collections: publishingResults.shopify[index]?.collections || null,
+        extractedTags: publishingResults.shopify[index]?.extractedTags || [],
       })),
       wordpress: publishingDestinations.wordpress.map((config, index) => ({
         name: config.name,
         published: publishingResults.wordpress[index]?.success ? 1 : 0,
         errors: publishingResults.wordpress[index]?.success ? 0 : 1,
+        categories: {
+          used: publishingResults.wordpress[index]?.categoriesUsed || [],
+          assigned: publishingResults.wordpress[index]?.categoriesAssigned || []
+        },
+        extractedTags: publishingResults.wordpress[index]?.extractedTags || [],
       })),
     };
 
-    // 10. Update database with all publication results
+    // 10. Update database with all publication results including collections, tags data
     const updateData = {
       publishing_results: JSON.stringify(publishingResults),
       total_shopify_published: shopifyPublished,
       total_wordpress_published: wordpressPublished,
       total_destinations: totalDestinations,
       published_at: new Date().toISOString(),
+
+      // Store collections, categories, and tags data
+      shopify_collections_used: JSON.stringify(shopifyCollections),
+      wordpress_categories_used: JSON.stringify(wordpressCategories),
+      extracted_tags: JSON.stringify(finalExtractedTags),
 
       // Legacy compatibility - set first successful result to old fields
       published_to_shopify: publishingResults.shopify.some(r => r.success),
@@ -920,6 +1237,9 @@ Return ONLY the complete markdown blog content with images with proper blog form
       shopifyPublished,
       wordpressPublished,
       destinationResults,
+      collectionsUsed: shopifyCollections,
+      categoriesUsed: wordpressCategories,
+      extractedTags: finalExtractedTags,
       aiProvider: 'DeepSeek'
     };
   } catch (error) {
@@ -945,6 +1265,9 @@ export async function GET(req) {
         total_wordpress_published,
         total_destinations,
         published_at,
+        shopify_collections_used,
+        wordpress_categories_used,
+        extracted_tags,
         shopify_article_id,
         shopify_url,
         shopify_handle,
@@ -989,6 +1312,9 @@ export async function GET(req) {
     // Transform data to match frontend expectations
     const transformedData = humanizedBlogs.map((item) => {
       const publishingResults = item.publishing_results ? JSON.parse(item.publishing_results) : null;
+      const collectionsUsed = item.shopify_collections_used ? JSON.parse(item.shopify_collections_used) : {};
+      const categoriesUsed = item.wordpress_categories_used ? JSON.parse(item.wordpress_categories_used) : {};
+      const extractedTags = item.extracted_tags ? JSON.parse(item.extracted_tags) : [];
 
       return {
         id: item.id,
@@ -998,6 +1324,9 @@ export async function GET(req) {
         total_destinations: item.total_destinations || 0,
         total_shopify_published: item.total_shopify_published || 0,
         total_wordpress_published: item.total_wordpress_published || 0,
+        collections_used: collectionsUsed,
+        categories_used: categoriesUsed,
+        extracted_tags: extractedTags,
         publishing_status: {
           shopify: {
             published: item.published_to_shopify || false,
@@ -1047,6 +1376,7 @@ export async function GET(req) {
       avgDestinationsPerItem: transformedData.length > 0
         ? (transformedData.reduce((sum, item) => sum + item.total_destinations, 0) / transformedData.length).toFixed(1)
         : 0,
+      totalTagsExtracted: transformedData.reduce((sum, item) => sum + item.extracted_tags.length, 0),
       aiProvider: 'DeepSeek'
     };
 
@@ -1081,10 +1411,10 @@ export async function GET(req) {
   }
 }
 
-// POST endpoint - Process a single blog URL with multi-destination support and categories
+// POST endpoint - Process a single blog URL with multi-destination support, categories, collections, and tag extraction
 export async function POST(req) {
   try {
-    console.log('🔍 POST endpoint hit for DeepSeek multi-destination processing');
+    console.log('🔍 POST endpoint hit for DeepSeek multi-destination processing with collections and tag extraction');
 
     let requestBody;
     try {
@@ -1101,13 +1431,14 @@ export async function POST(req) {
       );
     }
 
-    const { url, action, publishingDestinations, wordpressCategories } = requestBody;
+    const { url, action, publishingDestinations, wordpressCategories, shopifyCollections } = requestBody;
 
     console.log('🔍 Extracted values:');
     console.log('  - URL:', url);
     console.log('  - Action:', action);
     console.log('  - Publishing Destinations:', publishingDestinations);
     console.log('  - WordPress Categories:', wordpressCategories);
+    console.log('  - Shopify Collections:', shopifyCollections);
 
     if (!url || typeof url !== 'string' || !url.trim()) {
       console.log('❌ URL validation failed');
@@ -1160,7 +1491,7 @@ export async function POST(req) {
 
     logger.info(`Processing blog request with DeepSeek for: ${url}`);
 
-    const result = await processSingleBlog(url, publishingDestinations, wordpressCategories);
+    const result = await processSingleBlog(url, publishingDestinations, wordpressCategories, shopifyCollections);
 
     return new Response(JSON.stringify(result), {
       status: 200,
