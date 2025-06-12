@@ -41,9 +41,8 @@ async function callDeepSeekWithRetry(
   while (retries < maxRetries) {
     try {
       const response = await deepseek.chat.completions.create({
-        model: 'o3-mini',
+        model: 'gpt-4o',
         messages: messages,
-        temperature: temperature,
       });
       return response;
     } catch (error) {
