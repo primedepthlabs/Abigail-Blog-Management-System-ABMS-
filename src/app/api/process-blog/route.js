@@ -7,9 +7,9 @@ import * as cheerio from 'cheerio';
 
 // Initialize DeepSeek API client
 const deepseek = new OpenAI({
-  apiKey: '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',
+  apiKey: process.env.DEEPSEEK_API_KEY || 'sk-7cea9a49d17642c193d15edb2ebd659e',
+  baseURL: 'https://api.deepseek.com/v1'
 });
-
 const logger = {
   info: (message, data) => {
     console.log(`[INFO] ${new Date().toISOString()} - ${message}`, data || '');
@@ -41,7 +41,7 @@ async function callDeepSeekWithRetry(
   while (retries < maxRetries) {
     try {
       const response = await deepseek.chat.completions.create({
-        model: 'gpt-4o',
+        model: 'deepseek-chat',
         messages: messages,
       });
       return response;
@@ -259,7 +259,7 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyCo
     // Extract tags from content and clean the content
     const extractedTags = extractTags(humanizedMarkdown);
     const cleanedMarkdown = cleanTagsFromContent(humanizedMarkdown);
-    const htmlContent = markdownToHtml(cleanedMarkdown.replace(`# ${title}`, ''));
+    const htmlContent = markdownToHtml(humanizedMarkdown.replace(`# ${title}`, ''));
 
     // Extract full plain text without truncation
     const plainText = cleanedMarkdown
@@ -486,7 +486,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
     // Extract tags from content and clean the content
     const extractedTags = extractTags(humanizedMarkdown);
     const cleanedMarkdown = cleanTagsFromContent(humanizedMarkdown);
-    const htmlContent = markdownToHtml(cleanedMarkdown.replace(`# ${title}`, ''));
+    const htmlContent = markdownToHtml(humanizedMarkdown.replace(`# ${title}`, ''));
 
     logger.info(`Creating WordPress blog post on ${wpConfig.name}: "${title}"`);
 
