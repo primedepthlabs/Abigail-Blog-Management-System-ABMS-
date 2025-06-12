@@ -7,8 +7,7 @@ import * as cheerio from 'cheerio';
 
 // Initialize DeepSeek API client
 const deepseek = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY || 'sk-7cea9a49d17642c193d15edb2ebd659e',
-  baseURL: 'https://api.deepseek.com/v1'
+  apiKey: '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'
 });
 const logger = {
   info: (message, data) => {
@@ -41,7 +40,7 @@ async function callDeepSeekWithRetry(
   while (retries < maxRetries) {
     try {
       const response = await deepseek.chat.completions.create({
-        model: 'deepseek-chat',
+        model: 'o3-mini',
         messages: messages,
       });
       return response;
