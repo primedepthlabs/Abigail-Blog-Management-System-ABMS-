@@ -261,7 +261,7 @@ async function createShopifyBlogPost(humanizedMarkdown, blogData = {}, shopifyCo
     // Extract tags from content and clean the content
     const extractedTags = extractTags(humanizedMarkdown);
     const cleanedMarkdown = cleanTagsFromContent(humanizedMarkdown);
-    const htmlContent = markdownToHtml(cleanedMarkdown.replaceAll(title, ''));
+    const htmlContent = markdownToHtml(cleanedMarkdown.replace(`# ${title}`, ''));
 
     // Extract full plain text without truncation
     const plainText = cleanedMarkdown
@@ -488,7 +488,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
     // Extract tags from content and clean the content
     const extractedTags = extractTags(humanizedMarkdown);
     const cleanedMarkdown = cleanTagsFromContent(humanizedMarkdown);
-    const htmlContent = markdownToHtml(cleanedMarkdown.replaceAll(title, ''));
+    const htmlContent = markdownToHtml(cleanedMarkdown.replace(`# ${title}`, ''));
 
     logger.info(`Creating WordPress blog post on ${wpConfig.name}: "${title}"`);
 
@@ -535,7 +535,7 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
 
     const wpPayload = {
       title: title,
-      content: htmlContent.replaceAll(title, ''),
+      content: htmlContent,
       status: wpConfig.defaultStatus || 'publish',
       excerpt: excerpt,
       author: 1,
