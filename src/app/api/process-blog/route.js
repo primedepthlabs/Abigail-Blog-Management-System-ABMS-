@@ -540,7 +540,6 @@ async function createWordPressBlogPost(humanizedMarkdown, blogData = {}, wpConfi
       excerpt: excerpt,
       author: 1,
       categories: categoriesToUse,
-      tags: finalTags, // Use extracted tags instead of wpConfig.tags
       meta: {
         _wp_original_source: blogData.url || '',
         _wp_original_author: blogData.author || '',
