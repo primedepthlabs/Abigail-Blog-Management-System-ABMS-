@@ -8,8 +8,11 @@ import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneR
 import AccountCircleRoundedIcon from '@mui/icons-material/AccountCircleRounded';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import RssFeedIcon from '@mui/icons-material/RssFeed';
+import LogoutIcon from '@mui/icons-material/Logout';
 import { useState } from 'react';
 import NewsIcon from '@mui/icons-material/Article'; // Assuming you have a News icon
+import { useRouter } from 'next/navigation';
+import Cookies from 'js-cookie';
 
 // Updated interface to include theme props
 interface SidebarProps {
@@ -27,6 +30,13 @@ export default function Sidebar({
 }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [notificationCount, setNotificationCount] = useState(3);
+  const router = useRouter();
+
+  // TODO: REMOVE THIS TEMPORARY LOGOUT FUNCTION WHEN IMPLEMENTING A PROPER AUTHENTICATION SYSTEM
+  const handleLogout = () => {
+    Cookies.remove('isAdmin');
+    router.push('/login');
+  };
 
   // Menu items definition
   const menuItems = [
@@ -314,6 +324,37 @@ export default function Sidebar({
             )}
           </AnimatePresence>
         </motion.div>
+
+        {/* Logout Button */}
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={handleLogout}
+          className={`w-full flex items-center ${
+            isExpanded ? 'gap-3 px-4 py-3' : 'justify-center py-3'
+          } rounded-xl mt-2
+            ${
+              theme === 'dark'
+                ? 'bg-red-600 hover:bg-red-700 text-white'
+                : 'bg-red-50 hover:bg-red-100 text-red-600'
+            } 
+            transition-colors duration-200`}
+        >
+          <LogoutIcon className="text-lg" />
+          <AnimatePresence>
+            {isExpanded && (
+              <motion.span
+                initial={{ opacity: 0, x: -5 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -5 }}
+                transition={{ duration: 0.2 }}
+                className="text-sm font-medium"
+              >
+                Logout
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </motion.button>
       </div>
     </motion.aside>
   );

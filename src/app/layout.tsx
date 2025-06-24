@@ -1,5 +1,8 @@
 import { Metadata } from 'next';
 import * as React from 'react';
+import { useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import Cookies from 'js-cookie';
 
 import '@/styles/globals.css';
 // !STARTERCONF This is for demo purposes, remove @/styles/colors.css import immediately
@@ -54,6 +57,18 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // TODO: REMOVE THIS TEMPORARY AUTHENTICATION SYSTEM WHEN IMPLEMENTING A PROPER AUTHENTICATION SYSTEM
+  // Route protection on client side
+  if (typeof window !== 'undefined') {
+    const pathname = window.location.pathname;
+    const isAdmin = Cookies.get('isAdmin');
+    if (!isAdmin && pathname !== '/login') {
+      window.location.href = '/login';
+    }
+    if (isAdmin && pathname === '/login') {
+      window.location.href = '/';
+    }
+  }
   return (
     <html>
       <body>{children}</body>
