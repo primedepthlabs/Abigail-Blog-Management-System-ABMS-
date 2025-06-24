@@ -7,7 +7,7 @@ import * as cheerio from 'cheerio';
 
 // Initialize DeepSeek API client
 const deepseek = new OpenAI({
-  apiKey: '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'
+  apiKey: process.env.DEEPSEEK_API_KEY ?? "",
 });
 const logger = {
   info: (message, data) => {
